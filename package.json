@@ -1,0 +1,26 @@
+{
+  "name": "hanpun",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "mobile": "pnpm --filter @hanpun/mobile",
+    "server": "pnpm --filter @hanpun/server",
+    "ios": "pnpm --filter @hanpun/mobile ios",
+    "android": "pnpm --filter @hanpun/mobile android",
+    "start": "pnpm --filter @hanpun/mobile start",
+    "pods": "pnpm --filter @hanpun/mobile pods",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down"
+  },
+  "devDependencies": {
+    "prettier": "2.8.8",
+    "typescript": "5.8.3"
+  }
+}

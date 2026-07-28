@@ -1,0 +1,470 @@
+import type { CategoryStat } from '@hanpun/shared';
+import {
+  formatMonthLong,
+  formatNumber,
+  getCategory,
+  getCategoryLabel,
+} from '@hanpun/shared';
+import React, { useMemo, useState } from 'react';
+import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+
+import { ChartPie } from 'lucide-react-native';
+
+import {
+  Card,
+  EmptyState,
+  getCategoryIcon,
+  MonthNav,
+  Screen,
+  SegmentedControl,
+  TabHeader,
+  type SegmentOption,
+} from '../components';
+import { useBudgetProgress } from '../hooks/useBudgets';
+import { useMonthNavigation } from '../hooks/useMonthNavigation';
+import { useMonthlyStats, useYearlyStats } from '../hooks/useStats';
+import { cx } from '../theme/classes';
+import { useTheme } from '../theme/ThemeProvider';
+import { palette } from '../theme/tokens';
+
+type Range = 'month' | 'year';
+
+const RANGE_OPTIONS: SegmentOption<Range>[] = [
+  { value: 'month', label: '월간' },
+  { value: 'year', label: '연간' },
+];
+
+/** 통계 (디자인 stats / stats-year) */
+export function StatsScreen() {
+  const { tokens } = useTheme();
+  const [range, setRange] = useState<Range>('month');
+  const { month, goPrev, goNext, canGoNext } = useMonthNavigation();
+  const [year, setYear] = useState(() => new Date().getFullYear());
+
+  const label =
+    range === 'month' ? formatMonthLong(month) : `${year}년`;
+
+  return (
+    <Screen edges={{ bottom: false }}>
+      <TabHeader
+        title="통계"
+        right={
+          range === 'month' ? (
+            <MonthNav label={label} onPrev={goPrev} onNext={goNext} canGoNext={canGoNext} />
+          ) : (
+            <MonthNav
+              label={label}
+              onPrev={() => setYear(prev => prev - 1)}
+              onNext={() => setYear(prev => prev + 1)}
+              canGoNext={year < new Date().getFullYear()}
+            />
+          )
+        }
+      />
+
+      <ScrollView contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 40 }}>
+        <View className="mb-[14px] items-center">
+          <View style={{ width: 180 }}>
+            <SegmentedControl options={RANGE_OPTIONS} value={range} onChange={setRange} />
+          </View>
+        </View>
+
+        {range === 'month' ? (
+          <MonthlyStatsView month={month} />
+        ) : (
+          <YearlyStatsView year={year} />
+        )}
+
+        <Text className="mt-[16px] text-center text-[11.5px]" style={{ color: tokens.ink3 }}>
+          {range === 'month' ? '카테고리 막대는 예산 대비 사용률이에요' : '연간은 월별 지출 합계 기준이에요'}
+        </Text>
+      </ScrollView>
+    </Screen>
+  );
+}
+
+/* ---------------------------------- 월간 ---------------------------------- */
+
+function MonthlyStatsView({ month }: { month: string }) {
+  const { tokens } = useTheme();
+  const { data: stats, isLoading } = useMonthlyStats(month);
+  const { data: progress } = useBudgetProgress(month);
+
+  const budgetByCategory = useMemo(() => {
+    const map = new Map<string, number>();
+    (progress ?? []).forEach(item => {
+      if (item.categoryId) {
+        map.set(item.categoryId, item.budgetAmount);
+      }
+    });
+    return map;
+  }, [progress]);
+
+  if (isLoading || !stats) {
+    return (
+      <View className="items-center pt-[70px]">
+        <ActivityIndicator color={tokens.ink3} />
+      </View>
+    );
+  }
+
+  if (stats.totalExpense === 0 && stats.totalIncome === 0) {
+    return (
+      <EmptyState
+        icon={ChartPie}
+        title="이번 달 기록이 없어요"
+        description={'거래를 기록하면 카테고리별 지출과\n추이를 여기서 볼 수 있어요'}
+      />
+    );
+  }
+
+  const expenseStats = stats.byCategory
+    .filter(stat => isExpenseStat(stat))
+    .sort((a, b) => b.amount - a.amount);
+
+  const top = expenseStats.slice(0, 6);
+  const rest = expenseStats.slice(6);
+  const restAmount = rest.reduce((acc, stat) => acc + stat.amount, 0);
+  const restRatio = rest.reduce((acc, stat) => acc + stat.ratio, 0);
+
+  const overBudget = expenseStats.filter(stat => {
+    const budget = budgetByCategory.get(stat.categoryId) ?? 0;
+    return budget > 0 && stat.amount > budget;
+  });
+
+  const diff = stats.totalExpense - stats.prevMonthExpense;
+  const diffRatio =
+    stats.prevMonthExpense > 0 ? Math.round((Math.abs(diff) / stats.prevMonthExpense) * 100) : 0;
+
+  const maxDay = Math.max(...stats.byDay.map(day => day.expense), 1);
+
+  return (
+    <>
+      <Card padded={false} className="px-[16px] py-[16px]">
+        <View className="flex-row">
+          <Kpi label="지출" value={formatNumber(stats.totalExpense)} />
+          <Kpi label="수입" value={formatNumber(stats.totalIncome)} color={tokens.good} />
+          <Kpi
+            label="수지"
+            value={`${stats.totalIncome - stats.totalExpense >= 0 ? '+' : '-'}${formatNumber(
+              Math.abs(stats.totalIncome - stats.totalExpense),
+            )}`}
+          />
+        </View>
+      </Card>
+
+      <Card padded={false} className="mt-[14px] px-[16px] py-[16px]">
+        <View className="mb-[12px] flex-row items-baseline">
+          <Text className="text-[13.5px] font-bold text-ink dark:text-ink-dark">
+            카테고리별 지출
+          </Text>
+          <Text className="ml-[4px] text-[11px]" style={{ color: tokens.ink3 }}>
+            · 예산 대비
+          </Text>
+        </View>
+
+        {top.map(stat => {
+          const budget = budgetByCategory.get(stat.categoryId) ?? 0;
+          const usage = budget > 0 ? stat.amount / budget : stat.ratio;
+          const over = budget > 0 && stat.amount > budget;
+          return (
+            <CategoryBar
+              key={stat.categoryId}
+              label={getCategoryLabel(stat.categoryId)}
+              categoryId={stat.categoryId}
+              ratio={Math.min(usage, 1)}
+              over={over}
+              amount={stat.amount}
+              share={stat.ratio}
+            />
+          );
+        })}
+
+        {rest.length > 0 ? (
+          <CategoryBar
+            label="그 외"
+            ratio={Math.min(restRatio, 1)}
+            over={false}
+            amount={restAmount}
+            share={restRatio}
+          />
+        ) : null}
+
+        {overBudget.length > 0 ? (
+          <Text className="mt-[6px] text-[11px]" style={{ color: tokens.critical }}>
+            {`● ${getCategoryLabel(overBudget[0]!.categoryId)} — 예산 ${formatNumber(
+              budgetByCategory.get(overBudget[0]!.categoryId) ?? 0,
+            )}원 초과`}
+          </Text>
+        ) : null}
+      </Card>
+
+      <Card padded={false} className="mt-[14px] px-[16px] py-[16px]">
+        <Text className="mb-[12px] text-[13.5px] font-bold text-ink dark:text-ink-dark">
+          일별 지출 추이
+        </Text>
+        <View style={{ height: 64, flexDirection: 'row', alignItems: 'flex-end', gap: 3 }}>
+          {stats.byDay.map(day => {
+            const height = Math.max((day.expense / maxDay) * 64, day.expense > 0 ? 3 : 2);
+            const isMax = day.expense === maxDay && day.expense > 0;
+            return (
+              <View
+                key={day.date}
+                style={{
+                  flex: 1,
+                  height,
+                  borderRadius: 3,
+                  backgroundColor: isMax
+                    ? palette.orange500
+                    : day.expense > 0
+                      ? palette.orange300
+                      : tokens.chartEmpty,
+                }}
+              />
+            );
+          })}
+        </View>
+        <View className="mt-[6px] flex-row justify-between">
+          {dayAxisLabels(month, stats.byDay.length).map(text => (
+            <Text key={text} style={{ fontSize: 10, color: tokens.ink3 }}>
+              {text}
+            </Text>
+          ))}
+        </View>
+      </Card>
+
+      <Card padded={false} className="mt-[14px] flex-row items-center justify-between px-[16px] py-[14px]">
+        <Text className={cx.caption}>전월 같은 기간 대비</Text>
+        <Text
+          className="text-caption font-bold"
+          style={{
+            color: diff <= 0 ? tokens.good : tokens.critical,
+          }}>
+          {stats.prevMonthExpense === 0
+            ? '비교할 기록이 없어요'
+            : `${diff <= 0 ? '-' : '+'}${formatNumber(Math.abs(diff))}원 (${
+                diff <= 0 ? '↓' : '↑'
+              }${diffRatio}%)`}
+        </Text>
+      </Card>
+    </>
+  );
+}
+
+/* ---------------------------------- 연간 ---------------------------------- */
+
+function YearlyStatsView({ year }: { year: number }) {
+  const { tokens } = useTheme();
+  const { data: stats, isLoading } = useYearlyStats(year);
+
+  if (isLoading || !stats) {
+    return (
+      <View className="items-center pt-[70px]">
+        <ActivityIndicator color={tokens.ink3} />
+      </View>
+    );
+  }
+
+  const months = stats.byMonth;
+  const maxMonth = months.reduce(
+    (acc, item) => (item.expense > acc.expense ? item : acc),
+    months[0] ?? { month: '', expense: 0, income: 0 },
+  );
+  const max = Math.max(maxMonth.expense, 1);
+  const recorded = months.filter(item => item.expense > 0).length;
+  const average = recorded > 0 ? Math.round(stats.totalExpense / recorded) : 0;
+
+  const topCategory = [...stats.byCategory]
+    .filter(stat => isExpenseStat(stat))
+    .sort((a, b) => b.amount - a.amount)[0];
+
+  return (
+    <>
+      <Card padded={false} className="px-[16px] py-[16px]">
+        <View className="flex-row">
+          <Kpi label="연 지출" value={formatNumber(stats.totalExpense)} size={16} />
+          <Kpi label="연 수입" value={formatNumber(stats.totalIncome)} color={tokens.good} size={16} />
+          <Kpi label="월평균 지출" value={formatNumber(average)} size={16} />
+        </View>
+      </Card>
+
+      <Card padded={false} className="mt-[14px] px-[16px] py-[16px]">
+        <Text className="mb-[12px] text-[13.5px] font-bold text-ink dark:text-ink-dark">
+          월별 지출
+        </Text>
+        <View style={{ height: 150, flexDirection: 'row', alignItems: 'flex-end', gap: 6 }}>
+          {months.map(item => {
+            const isMax = item.expense === maxMonth.expense && item.expense > 0;
+            const height = item.expense > 0 ? Math.max((item.expense / max) * 150, 4) : 3;
+            return (
+              <View key={item.month} style={{ flex: 1, alignItems: 'center' }}>
+                <View
+                  style={{
+                    width: '100%',
+                    maxWidth: 18,
+                    height,
+                    borderTopLeftRadius: 4,
+                    borderTopRightRadius: 4,
+                    backgroundColor:
+                      item.expense === 0
+                        ? tokens.chartEmpty
+                        : isMax
+                          ? palette.orange500
+                          : palette.orange300,
+                  }}
+                />
+              </View>
+            );
+          })}
+        </View>
+        <View className="mt-[6px] flex-row">
+          {months.map(item => (
+            <Text
+              key={item.month}
+              style={{ flex: 1, textAlign: 'center', fontSize: 9.5, color: tokens.ink3 }}>
+              {monthNumber(item.month)}
+            </Text>
+          ))}
+        </View>
+        {maxMonth.expense > 0 ? (
+          <Text className="mt-[10px] text-[11px] text-ink-2 dark:text-ink-dark-2">
+            {`${monthNumber(maxMonth.month)}월이 가장 많이 쓴 달 · ${formatNumber(
+              maxMonth.expense,
+            )}원`}
+          </Text>
+        ) : null}
+      </Card>
+
+      {topCategory ? (
+        <Card
+          padded={false}
+          className="mt-[14px] flex-row items-center justify-between px-[16px] py-[14px]">
+          <Text className={cx.caption}>연간 최다 지출 카테고리</Text>
+          <Text className="text-caption font-bold text-ink dark:text-ink-dark">
+            {`${getCategoryLabel(topCategory.categoryId)} · ${Math.round(topCategory.ratio * 100)}%`}
+          </Text>
+        </Card>
+      ) : null}
+    </>
+  );
+}
+
+/* --------------------------------- 조각들 --------------------------------- */
+
+function Kpi({
+  label,
+  value,
+  color,
+  size = 17,
+}: {
+  label: string;
+  value: string;
+  color?: string;
+  size?: number;
+}) {
+  const { tokens } = useTheme();
+  return (
+    <View className="flex-1">
+      <Text style={{ fontSize: 11, color: tokens.ink3 }}>{label}</Text>
+      <Text
+        numberOfLines={1}
+        style={{ marginTop: 4, fontSize: size, fontWeight: '700', color: color ?? tokens.ink }}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
+function CategoryBar({
+  label,
+  categoryId,
+  ratio,
+  over,
+  amount,
+  share,
+}: {
+  label: string;
+  categoryId?: string;
+  ratio: number;
+  over: boolean;
+  amount: number;
+  share: number;
+}) {
+  const { tokens, isDark } = useTheme();
+  const meta = categoryId ? getCategory(categoryId) : null;
+  const Icon = meta ? getCategoryIcon(meta.icon) : null;
+
+  return (
+    <View className="mb-[10px] flex-row items-center">
+      <View style={{ width: 82, flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+        {Icon ? (
+          <Icon
+            size={13}
+            strokeWidth={2.2}
+            color={isDark ? meta!.strokeDark : meta!.stroke}
+          />
+        ) : null}
+        <Text numberOfLines={1} className="text-[12px] text-ink dark:text-ink-dark">
+          {label}
+        </Text>
+      </View>
+
+      <View
+        style={{
+          flex: 1,
+          height: 14,
+          borderRadius: 4,
+          overflow: 'hidden',
+          backgroundColor: tokens.track,
+        }}>
+        <View
+          style={{
+            width: `${Math.max(Math.min(ratio, 1) * 100, 2)}%`,
+            height: '100%',
+            borderRadius: 4,
+            backgroundColor: over ? tokens.critical : palette.orange500,
+          }}
+        />
+      </View>
+
+      <Text
+        numberOfLines={1}
+        style={{
+          width: 74,
+          textAlign: 'right',
+          fontSize: 12,
+          fontWeight: '600',
+          color: over ? tokens.critical : tokens.ink,
+        }}>
+        {formatNumber(amount)}
+      </Text>
+      <Text style={{ width: 32, textAlign: 'right', fontSize: 11, color: tokens.ink3 }}>
+        {`${Math.round(share * 100)}%`}
+      </Text>
+    </View>
+  );
+}
+
+function isExpenseStat(stat: CategoryStat): boolean {
+  return getCategory(stat.categoryId).type === 'expense';
+}
+
+/** 'YYYY-MM' 또는 '7' 같은 값에서 월 숫자만 뽑는다 */
+function monthNumber(month: string): string {
+  const parts = month.split('-');
+  return String(Number(parts[1] ?? parts[0] ?? 0));
+}
+
+/**
+ * 스파크라인 x축 라벨.
+ * 막대는 월 전체 일수만큼 균등 폭으로 그려지고 라벨은 justify-between 으로 균등 배치되므로,
+ * 라벨도 균등 지점(1일 · 1/4 · 중간 · 3/4 · 말일)에서 뽑아야 막대와 날짜가 맞는다.
+ */
+function dayAxisLabels(month: string, days: number): string[] {
+  if (days <= 0) {
+    return [];
+  }
+  const monthLabel = Number(month.split('-')[1] ?? 1);
+  const picked = [0, 0.25, 0.5, 0.75, 1].map(ratio => Math.round(ratio * (days - 1)) + 1);
+  return [...new Set(picked)].map(day => `${monthLabel}.${day}`);
+}

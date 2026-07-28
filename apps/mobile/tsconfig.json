@@ -1,0 +1,18 @@
+{
+  "extends": "@react-native/typescript-config",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"],
+      "@hanpun/shared": ["../../packages/shared/src"],
+      "@hanpun/shared/*": ["../../packages/shared/src/*"]
+    },
+    "strict": true,
+    "noUnusedLocals": false,
+    "skipLibCheck": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "nativewind"
+  },
+  "include": ["**/*.ts", "**/*.tsx", "nativewind-env.d.ts"],
+  "exclude": ["**/node_modules", "**/Pods", "**/build"]
+}

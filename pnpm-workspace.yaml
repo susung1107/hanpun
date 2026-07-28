@@ -1,0 +1,12 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# pnpm 10 은 의존성의 postinstall 스크립트를 기본으로 차단한다(공급망 공격 방어).
+# 여기에 적은 패키지만 예외로 빌드를 허용한다.
+#
+# sharp — react-native-bootsplash 의 `generate` CLI 가 쓰는 이미지 변환 엔진.
+#   네이티브 바이너리를 postinstall 로 받으므로 승인해 두지 않으면
+#   스플래시 에셋 생성 명령이 실행 시점에 실패한다. 앱 런타임에는 포함되지 않는다.
+onlyBuiltDependencies:
+  - sharp
