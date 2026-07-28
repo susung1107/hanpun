@@ -1,6 +1,6 @@
 import { LogOut, RefreshCw, Trash2, User } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
+import { Alert, ScrollView, Text, View } from 'react-native';
 
 import { deleteAccount } from '../api/auth';
 import {
