@@ -45,13 +45,16 @@ import { useTheme } from '../theme/ThemeProvider';
 import { iconStroke, layout, palette } from '../theme/tokens';
 
 /**
- * 메인 카드 채움 색 — 임의로 바꾸지 마라, 대비 계산 결과다.
- * orange-500 위 흰 글씨는 대비 3.20 으로 AA(4.5:1) 미달. orange-600=4.57, orange-700=6.66.
- * 게이지 트랙도 흰 반투명(대비 2.93)이 아니라 검정 반투명(6.27)이라야 어디까지 찼는지 보인다.
+ * 메인 카드 — 홈에서 유일한 색 면. 밝은 브랜드 오렌지로 채운다.
+ * 이 위에 흰 글씨는 대비 3.20 으로 AA(4.5:1) 미달이라, 글씨를 진한 브라운으로 쓴다(대비 4.9:1).
+ * 투명도로 흐리면 대비가 무너지므로 카드 안 위계는 크기·굵기로만 만든다.
+ * 라이트·다크 모두 같은 밝은 오렌지 — 이 카드는 앱 테마와 무관한 자기만의 색 면이다.
  */
-const HERO_FILL_LIGHT = palette.orange600;
-const HERO_FILL_DARK = palette.orange700;
-const HERO_TRACK = 'rgba(0,0,0,0.20)';
+const HERO_FILL = palette.orange500;
+const HERO_INK = '#3a1a0a'; // 밝은 오렌지 위 본문/숫자 — 대비 4.9:1
+const HERO_LINE = 'rgba(0,0,0,0.12)'; // 카드 안 구분선
+const HERO_PILL = 'rgba(255,255,255,0.28)'; // 전월 대비 알약 — 밝게 깔아 진한 글씨 대비 확보
+const HERO_TRACK = 'rgba(255,255,255,0.32)'; // 게이지 트랙 — 밝게, 진한 게이지가 잘 보이도록
 
 const WEEK_BAR_HEIGHT = 52;
 
@@ -135,7 +138,7 @@ function buildUpcomingFixed(
 /** 홈 (디자인 home / empty-home) */
 export function HomeScreen() {
   const navigation = useAppNavigation();
-  const { tokens, isDark } = useTheme();
+  const { tokens } = useTheme();
   const month = toMonthKey(new Date());
   const [year, monthNumber] = month.split('-');
 
@@ -291,28 +294,29 @@ export function HomeScreen() {
           />
         }>
         {/* ① 메인 카드 — 홈에서 유일한 색 면. Card 는 bg-surface 를 강제하므로 View 로 만든다.
-            카드 안 글자는 전부 순백(#fff)이고 위계는 크기·굵기로만 만든다 — 투명도를 쓰면 대비가 무너진다.
-            isEmpty 여도 이 카드는 ₩0 과 안내 문구로 그려지고, 그 아래에 EmptyState 가 온다. */}
+            밝은 오렌지 위 글자는 전부 진한 브라운(HERO_INK) — 투명도로 흐리면 대비가 무너지므로
+            위계는 크기·굵기로만 만든다. isEmpty 여도 이 카드는 ₩0 과 안내 문구로 그려지고,
+            그 아래에 EmptyState 가 온다. */}
         <View
           style={{
             borderRadius: layout.cardRadius,
             padding: 20,
-            backgroundColor: isDark ? HERO_FILL_DARK : HERO_FILL_LIGHT,
+            backgroundColor: HERO_FILL,
           }}>
-          <Text style={{ fontSize: 12.5, fontWeight: '600', color: '#ffffff' }}>이번 달 총 지출</Text>
+          <Text style={{ fontSize: 12.5, fontWeight: '600', color: HERO_INK }}>이번 달 총 지출</Text>
           <Text
             style={{
               marginTop: 6,
               fontSize: 36,
               fontWeight: '700',
-              color: '#ffffff',
+              color: HERO_INK,
               letterSpacing: -0.5,
             }}>
             {formatWon(totalExpense)}
           </Text>
 
           {isEmpty ? (
-            <Text style={{ marginTop: 10, fontSize: 12.5, color: '#ffffff' }}>
+            <Text style={{ marginTop: 10, fontSize: 12.5, color: HERO_INK }}>
               기록을 남기면 이번 달 흐름이 여기 쌓여요
             </Text>
           ) : (
@@ -324,17 +328,17 @@ export function HomeScreen() {
                 marginTop: 10,
                 alignSelf: 'flex-start',
                 borderRadius: 999,
-                backgroundColor: 'rgba(0,0,0,0.18)',
+                backgroundColor: HERO_PILL,
                 paddingHorizontal: 10,
                 paddingVertical: 4,
               }}>
-              <Text style={{ fontSize: 12, fontWeight: '600', color: '#ffffff' }}>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: HERO_INK }}>
                 {compare.text}
               </Text>
             </View>
           )}
 
-          <View style={{ marginTop: 16, height: 1, backgroundColor: 'rgba(255,255,255,0.22)' }} />
+          <View style={{ marginTop: 16, height: 1, backgroundColor: HERO_LINE }} />
 
           <View style={{ marginTop: 16 }}>
             {totalBudget ? (
@@ -344,21 +348,21 @@ export function HomeScreen() {
                   ratio={budgetRatio}
                   height={10}
                   warnOnOver={false}
-                  color="#ffffff"
+                  color={HERO_INK}
                   trackColor={HERO_TRACK}
                 />
                 <View className="mt-[8px] flex-row items-center justify-between">
-                  <Text style={{ fontSize: 12, color: '#ffffff' }}>
+                  <Text style={{ fontSize: 12, color: HERO_INK }}>
                     {`예산 ${formatBudgetWon(totalBudget.budgetAmount)} 중 ${Math.round(
                       budgetRatio * 100,
                     )}%`}
                   </Text>
                   {remaining >= 0 ? (
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#ffffff' }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: HERO_INK }}>
                       {`잔여 ${formatAmountKo(remaining)}`}
                     </Text>
                   ) : (
-                    // 초과는 흰 알약 + 빨간 글씨로 뒤집어 강조한다
+                    // 초과는 흰 알약 + 빨간 글씨로 뒤집어 강조한다 — 밝은 오렌지 위에서 흰 알약이 튄다
                     <View
                       style={{
                         borderRadius: 999,
@@ -378,7 +382,7 @@ export function HomeScreen() {
                 accessibilityRole="button"
                 onPress={() => navigation.navigate('Budget')}
                 className="active:opacity-70">
-                <Text style={{ fontSize: 13, fontWeight: '700', color: '#ffffff' }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: HERO_INK }}>
                   예산 설정하기 ›
                 </Text>
               </Pressable>
