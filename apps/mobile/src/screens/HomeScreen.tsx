@@ -834,20 +834,25 @@ function HomeSkeleton() {
 /**
  * 메인 카드 배경 — 위(top)에서 아래(bottom)로 흐르는 세로 그라데이션.
  * expo 를 안 쓰므로 이미 설치된 react-native-svg 로 그린다(추가 설치·pod 없음).
+ *
+ * Svg 에 width/height="100%" 를 주면 부모의 확정 높이가 없을 때 뷰포트가 카드보다
+ * 짧게 잡혀, 남는 아래쪽에 컨테이너 backgroundColor(진한 오렌지)가 그대로 비친다.
+ * 그래서 0~1 정규 좌표계(viewBox)를 absoluteFill 에 늘려 채운다 — 높이에 무관하게 꽉 찬다.
+ * preserveAspectRatio="none" 이 없으면 비율을 지키려 해서 카드를 다 못 채운다.
  * id 는 hp-home-hero 고정 — Logo.tsx 가 uid 로 만드는 id 와 겹치면 안드로이드에서 채움이 섞인다.
  * pointerEvents="none" 는 Svg 가 아니라 감싸는 View 에 준다.
  */
 function HeroBackground({ top, bottom }: { top: string; bottom: string }) {
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <Svg width="100%" height="100%">
+      <Svg style={StyleSheet.absoluteFill} viewBox="0 0 1 1" preserveAspectRatio="none">
         <Defs>
           <LinearGradient id="hp-home-hero" x1="0" y1="0" x2="0" y2="1">
             <Stop offset="0" stopColor={top} />
             <Stop offset="1" stopColor={bottom} />
           </LinearGradient>
         </Defs>
-        <Rect x="0" y="0" width="100%" height="100%" fill="url(#hp-home-hero)" />
+        <Rect x="0" y="0" width="1" height="1" fill="url(#hp-home-hero)" />
       </Svg>
     </View>
   );
