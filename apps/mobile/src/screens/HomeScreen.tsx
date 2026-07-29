@@ -7,7 +7,6 @@ import {
   formatPercent,
   formatRelativeDay,
   formatTimeKo,
-  formatWon,
   getCategory,
   getCategoryLabel,
   toDateKey,
@@ -333,7 +332,8 @@ export function HomeScreen() {
                 color: '#ffffff',
                 letterSpacing: -0.5,
               }}>
-              {formatWon(totalExpense)}
+              {formatNumber(totalExpense)}
+              <Text style={{ fontSize: 19, fontWeight: '600', color: HERO_UNIT }}>원</Text>
             </Text>
 
             {isEmpty ? (

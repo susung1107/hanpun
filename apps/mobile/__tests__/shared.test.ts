@@ -1,17 +1,17 @@
 import {
   buildCalendarGrid,
   calendarWeeks,
+  formatAmountKo,
   formatDateShort,
   formatMonthLong,
-  formatWon,
   getCategory,
   shiftMonth,
   toMonthKey,
 } from '@hanpun/shared';
 
 describe('금액 포맷', () => {
-  it('원 단위 천 단위 구분자를 넣는다', () => {
-    expect(formatWon(1234567)).toContain('1,234,567');
+  it('원 단위 천 단위 구분자를 넣고 원을 붙인다', () => {
+    expect(formatAmountKo(1234567)).toBe('1,234,567원');
   });
 });
 

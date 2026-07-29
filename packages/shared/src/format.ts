@@ -10,11 +10,6 @@ export function formatNumber(value: number): string {
   return NUMBER_FORMAT.format(Math.trunc(value));
 }
 
-/** 1284500 → "₩1,284,500" (요약 카드 대형 금액) */
-export function formatWon(value: number): string {
-  return `₩${formatNumber(value)}`;
-}
-
 /** 4500 → "4,500원" */
 export function formatAmountKo(value: number): string {
   return `${formatNumber(value)}원`;
