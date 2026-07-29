@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  한푼 로고 — 엽전 틸트 (A-3 정제) · 크림 면
+  주황 배경(스플래시 라이트 · 앱 아이콘) 위에 올리는 정본 마크.
+  디자인 원본: design/foundations/logo.html 의 #coin-light
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 52 52">
+  <defs>
+    <radialGradient id="face" cx=".36" cy=".28" r="1">
+      <stop offset="0" stop-color="#fffefb"/>
+      <stop offset=".55" stop-color="#f8f0e1"/>
+      <stop offset="1" stop-color="#e6d8c0"/>
+    </radialGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#d3c1a4"/>
+      <stop offset="1" stop-color="#b9a583"/>
+    </linearGradient>
+    <mask id="hole">
+      <rect width="52" height="52" fill="#fff"/>
+      <rect x="20.7" y="20" width="10.6" height="10.6" rx="2.5" fill="#000"/>
+    </mask>
+    <clipPath id="holeclip">
+      <rect x="20.7" y="20" width="10.6" height="10.6" rx="2.5"/>
+    </clipPath>
+    <filter id="b1"><feGaussianBlur stdDeviation=".7"/></filter>
+  </defs>
+
+  <g transform="rotate(-8 26 26)">
+    <g mask="url(#hole)">
+      <circle cx="26" cy="27.2" r="21.3" fill="url(#edge)"/>
+      <circle cx="26" cy="25.2" r="21.3" fill="url(#face)"/>
+      <circle cx="26" cy="25.2" r="17" fill="none" stroke="#b06a3a" stroke-width="1.5" opacity=".3"/>
+      <path d="M11.6 16.5 A17.5 17.5 0 0 1 22.5 6.9" fill="none" stroke="#ffffff"
+            stroke-width="3.2" stroke-linecap="round" opacity=".9" filter="url(#b1)"/>
+    </g>
+    <g clip-path="url(#holeclip)">
+      <rect x="20.7" y="20" width="10.6" height="2.4" fill="#6e2a08" opacity=".38" filter="url(#b1)"/>
+    </g>
+    <path d="M40.5 9.6 l1.1 2.5 2.5 1.1 -2.5 1.1 -1.1 2.5 -1.1 -2.5 -2.5 -1.1 2.5 -1.1z"
+          fill="#ffffff" opacity=".95"/>
+  </g>
+</svg>

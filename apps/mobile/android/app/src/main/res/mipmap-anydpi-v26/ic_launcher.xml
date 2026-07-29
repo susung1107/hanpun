@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 8.0(API 26) 이상은 적응형 아이콘을 쓴다.
+  런처가 배경/전경을 따로 마스킹하므로 전경은 108dp 캔버스 안 72dp 세이프 존에만 그린다.
+  (assets/app-icon.svg 와 같은 벡터에서 생성 — 한쪽만 고치지 말 것)
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@mipmap/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+</adaptive-icon>
