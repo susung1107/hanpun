@@ -7,7 +7,6 @@ import {
   formatPercent,
   formatRelativeDay,
   formatTimeKo,
-  formatWon,
   getCategory,
   getCategoryLabel,
   toDateKey,
@@ -16,8 +15,7 @@ import {
 import type { RecurringRule } from '@hanpun/shared';
 import { Bell, CalendarCheck, ChevronRight, Receipt } from 'lucide-react-native';
 import React, { useEffect, useMemo } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 
 import {
   Card,
@@ -45,20 +43,15 @@ import { cx } from '../theme/classes';
 import { useTheme } from '../theme/ThemeProvider';
 import { iconSize, iconStroke, layout, palette } from '../theme/tokens';
 
-/**
- * 메인 카드 채움 색 — 임의로 바꾸지 마라, 대비 계산 결과다.
- * 브랜드 orange-500 위 흰 글씨는 대비 3.20 으로 AA(4.5:1) 미달. 더 밝으면서 4.5:1 인 오렌지는 없다.
- * 그래서 위(진함)→아래(브랜드 색)로 밝아지는 세로 그라데이션으로 간다. 작은 글씨(라벨)는 맨 위에,
- * 아래쪽 작은 글씨는 어두운 패널이 덮으므로 이 방향이라야 알약 하나 없이 전부 통과한다.
- * 방향을 뒤집지 마라 — 밝음→어두움이면 최상단 라벨 대비가 3.20 으로 떨어진다.
- */
-const HERO_TOP_LIGHT = palette.orange600; // 흰 글씨 4.57
-const HERO_BOTTOM_LIGHT = palette.orange500; // 브랜드 색
-const HERO_TOP_DARK = palette.orange700; // 흰 글씨 6.66
-const HERO_BOTTOM_DARK = palette.orange600;
-const HERO_PANEL = 'rgba(0,0,0,0.22)'; // 최악점(브랜드 색 위) 기준 흰 글씨 4.97
-const HERO_TRACK = 'rgba(0,0,0,0.22)'; // 패널 위 겹침 → 흰 막대 7.24
-const HERO_PILL = 'rgba(0,0,0,0.18)'; // 흰 글씨 5.61
+// 메인 카드 — 브랜드 오렌지 원톤. 라이트는 브랜드색 그대로 orange-500(#eb6834), 다크는 orange-700.
+// ⚠️ orange-500 위 흰 12px 글씨는 대비 3.20 으로 AA(4.5:1) 미달 — 브랜드색을 우선한 의도된 선택이다.
+//    큰 숫자(36px)는 대형 텍스트라 3:1 을 넘어 읽히고, 라벨·예산 캡션은 미달을 감수한다.
+const HERO_FILL_LIGHT = palette.orange500; // 브랜드색 — 흰 작은 글씨 3.20 (AA 미달, 의도)
+const HERO_FILL_DARK = palette.orange700; // 흰 글씨 6.66
+const HERO_DIVIDER = 'rgba(255,255,255,0.16)'; // 예산 영역 구분선, 카드 면과 1.30
+const HERO_TRACK = 'rgba(0,0,0,0.20)'; // 카드 면 위 → 검정. 흰 막대와 6.65
+const HERO_PILL = 'rgba(0,0,0,0.18)'; // 흰 글씨 7.92
+const HERO_UNIT = 'rgba(255,255,255,0.88)'; // 금액 뒤 '원', 라이트 5.23
 
 const WEEK_BAR_HEIGHT = 52;
 
@@ -310,20 +303,13 @@ export function HomeScreen() {
             tintColor={tokens.ink3}
           />
         }>
-        {/* ① 메인 카드 — 위(진함)→아래(브랜드 색) 세로 그라데이션. 흰 글씨는 전부 대비 통과(상단 상수 주석).
-            예산 영역은 어두운 패널로 덮어 그 위 흰 글씨 대비까지 만든다.
-            isEmpty 여도 이 카드는 ₩0 과 안내 문구로 그려지고, 그 아래에 EmptyState 가 온다. */}
+        {/* ① 메인 카드 — 브랜드 오렌지 원톤(라이트 600 / 다크 700). 흰 글씨 위계는 크기·굵기로만.
+            isEmpty 여도 이 카드는 0원 과 안내 문구로 그려지고, 그 아래에 EmptyState 가 온다. */}
         <View
           style={{
             borderRadius: layout.cardRadius,
-            overflow: 'hidden', // SVG 사각형을 카드 모서리에 맞춰 자른다
-            backgroundColor: isDark ? HERO_TOP_DARK : HERO_TOP_LIGHT, // SVG 그려지기 전 한 프레임 안전판
+            backgroundColor: isDark ? HERO_FILL_DARK : HERO_FILL_LIGHT,
           }}>
-          <HeroBackground
-            top={isDark ? HERO_TOP_DARK : HERO_TOP_LIGHT}
-            bottom={isDark ? HERO_BOTTOM_DARK : HERO_BOTTOM_LIGHT}
-          />
-          {/* 패딩은 안쪽 View 에 준다 — 바깥에 주면 그라데이션이 패딩만큼 안으로 들어간다 */}
           <View style={{ padding: 20 }}>
             <Text style={{ fontSize: 12.5, fontWeight: '600', color: '#ffffff' }}>
               이번 달 총 지출
@@ -336,7 +322,8 @@ export function HomeScreen() {
                 color: '#ffffff',
                 letterSpacing: -0.5,
               }}>
-              {formatWon(totalExpense)}
+              {formatNumber(totalExpense)}
+              <Text style={{ fontSize: 19, fontWeight: '600', color: HERO_UNIT }}>원</Text>
             </Text>
 
             {isEmpty ? (
@@ -362,21 +349,20 @@ export function HomeScreen() {
               </View>
             )}
 
-            {/* 예산 패널 — 어두운 판이 흰 구분선을 대신하고 그 위 흰 글씨 대비를 만든다.
-                totalBudget 유무와 무관하게 패널은 항상 그린다 — 있다 없다 하면 카드 높이가 튄다 */}
+            {/* 예산 영역 — 판을 걷고 가는 구분선만 남긴다. 카드가 두 덩어리로 읽히지 않게.
+                totalBudget 유무와 무관하게 항상 그린다 — 있다 없다 하면 카드 높이가 튄다 */}
             <View
               style={{
                 marginTop: 16,
-                borderRadius: 14,
-                paddingHorizontal: 14,
-                paddingVertical: 13,
-                backgroundColor: HERO_PANEL,
+                paddingTop: 14,
+                borderTopWidth: 1,
+                borderTopColor: HERO_DIVIDER,
               }}>
               {totalBudget ? (
                 <>
                   <ProgressBar
                     ratio={budgetRatio}
-                    height={10}
+                    height={6}
                     warnOnOver={false}
                     color="#ffffff"
                     trackColor={HERO_TRACK}
@@ -827,28 +813,6 @@ function HomeSkeleton() {
       <View className="mt-[10px]">
         <Skeleton height={42} radius={12} />
       </View>
-    </View>
-  );
-}
-
-/**
- * 메인 카드 배경 — 위(top)에서 아래(bottom)로 흐르는 세로 그라데이션.
- * expo 를 안 쓰므로 이미 설치된 react-native-svg 로 그린다(추가 설치·pod 없음).
- * id 는 hp-home-hero 고정 — Logo.tsx 가 uid 로 만드는 id 와 겹치면 안드로이드에서 채움이 섞인다.
- * pointerEvents="none" 는 Svg 가 아니라 감싸는 View 에 준다.
- */
-function HeroBackground({ top, bottom }: { top: string; bottom: string }) {
-  return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <Svg width="100%" height="100%">
-        <Defs>
-          <LinearGradient id="hp-home-hero" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={top} />
-            <Stop offset="1" stopColor={bottom} />
-          </LinearGradient>
-        </Defs>
-        <Rect x="0" y="0" width="100%" height="100%" fill="url(#hp-home-hero)" />
-      </Svg>
     </View>
   );
 }
