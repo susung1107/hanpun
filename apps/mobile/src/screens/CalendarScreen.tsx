@@ -244,6 +244,9 @@ export function CalendarScreen() {
         ) : (
           <FlatList
             ref={listRef}
+            // flex:1 이 없으면 스크롤 프레임이 콘텐츠 높이(61페이지)로 잡혀 pagingEnabled·
+            // getItemLayout·initialScrollIndex 가 전부 어긋난다 — 현재 달로 못 가고 빈 과거 달에 갇힌다
+            style={{ flex: 1 }}
             data={months}
             keyExtractor={item => item}
             renderItem={({ item }) => (
