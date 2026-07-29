@@ -20,7 +20,6 @@ module.exports = {
           500: '#eb6834',
           600: '#c94e1f',
           700: '#a03c15',
-          800: '#802e0e',
         },
         ink: {
           DEFAULT: '#1c1b1a',

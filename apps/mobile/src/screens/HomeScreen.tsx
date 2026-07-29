@@ -44,13 +44,13 @@ import { cx } from '../theme/classes';
 import { useTheme } from '../theme/ThemeProvider';
 import { iconSize, iconStroke, layout, palette } from '../theme/tokens';
 
-// 메인 카드 — 예산 영역의 어두운 판을 걷어낸 대신, 카드 전체 색을 한 단계 내려
-// 판 없이도 흰 12px 글씨가 AA(4.5:1)를 넘게 만든다. 두 결정은 한 몸이다.
-// 그라데이션은 위(진함)→아래(밝음) — 뒤집으면 최상단 라벨 대비가 3.20 으로 떨어진다.
-const HERO_TOP_LIGHT = palette.orange700; // #a03c15, 흰 글씨 6.66
-const HERO_BOTTOM_LIGHT = palette.orange600; // #c94e1f, 흰 글씨 4.57 (카드 최악점)
-const HERO_TOP_DARK = palette.orange800; // #802e0e, 흰 글씨 9.07
-const HERO_BOTTOM_DARK = palette.orange700; // #a03c15, 흰 글씨 6.66
+// 메인 카드 — 가장자리(라벨·예산)는 orange-600 으로 흰 12px 글씨 대비(4.57)를 지키고,
+// 총지출 숫자 자리에만 브랜드 오렌지(orange-500)를 번지게 한다. 큰 숫자는 대형 텍스트라
+// 3:1 만 넘으면 되므로 브랜드색 위(3.20)에서도 읽힌다. 다크는 한 단계 깊게(가장자리 700 / 번짐 600).
+const HERO_EDGE_LIGHT = palette.orange600; // 카드 가장자리 — 흰 글씨 4.57
+const HERO_BLOOM_LIGHT = palette.orange500; // 숫자 뒤 브랜드 오렌지 번짐
+const HERO_EDGE_DARK = palette.orange700;
+const HERO_BLOOM_DARK = palette.orange600;
 const HERO_DIVIDER = 'rgba(255,255,255,0.16)'; // 예산 영역 구분선, 카드 면과 1.30
 const HERO_TRACK = 'rgba(0,0,0,0.20)'; // 카드 면 위 → 검정. 흰 막대와 6.65
 const HERO_PILL = 'rgba(0,0,0,0.18)'; // 흰 글씨 7.92
@@ -313,11 +313,11 @@ export function HomeScreen() {
           style={{
             borderRadius: layout.cardRadius,
             overflow: 'hidden', // SVG 사각형을 카드 모서리에 맞춰 자른다
-            backgroundColor: isDark ? HERO_TOP_DARK : HERO_TOP_LIGHT, // SVG 그려지기 전 한 프레임 안전판
+            backgroundColor: isDark ? HERO_EDGE_DARK : HERO_EDGE_LIGHT, // SVG 그려지기 전 한 프레임 안전판
           }}>
           <HeroBackground
-            top={isDark ? HERO_TOP_DARK : HERO_TOP_LIGHT}
-            bottom={isDark ? HERO_BOTTOM_DARK : HERO_BOTTOM_LIGHT}
+            edge={isDark ? HERO_EDGE_DARK : HERO_EDGE_LIGHT}
+            bloom={isDark ? HERO_BLOOM_DARK : HERO_BLOOM_LIGHT}
           />
           {/* 패딩은 안쪽 View 에 준다 — 바깥에 주면 그라데이션이 패딩만큼 안으로 들어간다 */}
           <View style={{ padding: 20 }}>
@@ -828,24 +828,27 @@ function HomeSkeleton() {
 }
 
 /**
- * 메인 카드 배경 — 위(top)에서 아래(bottom)로 흐르는 세로 그라데이션.
- * expo 를 안 쓰므로 이미 설치된 react-native-svg 로 그린다(추가 설치·pod 없음).
+ * 메인 카드 배경 — 가장자리는 edge(orange-600), 총지출 숫자 자리(위쪽)에만 bloom(브랜드 오렌지)이
+ * 번졌다 다시 가라앉는다. 라벨(맨 위)과 예산(아래)은 edge 위라 흰 글씨 대비(4.57)가 유지되고,
+ * 브랜드색은 큰 숫자 뒤에서만 보인다. expo 미사용이라 이미 설치된 react-native-svg 로 그린다.
  *
- * Svg 에 width/height="100%" 를 주면 부모의 확정 높이가 없을 때 뷰포트가 카드보다
- * 짧게 잡혀, 남는 아래쪽에 컨테이너 backgroundColor(진한 오렌지)가 그대로 비친다.
- * 그래서 0~1 정규 좌표계(viewBox)를 absoluteFill 에 늘려 채운다 — 높이에 무관하게 꽉 찬다.
- * preserveAspectRatio="none" 이 없으면 비율을 지키려 해서 카드를 다 못 채운다.
- * id 는 hp-home-hero 고정 — Logo.tsx 가 uid 로 만드는 id 와 겹치면 안드로이드에서 채움이 섞인다.
+ * viewBox 0~1 정규 좌표 + preserveAspectRatio="none" 로 카드 높이에 무관하게 꽉 채운다(4차 수정).
+ * width/height="100%" 는 부모 확정 높이가 없으면 짧게 잡혀 배경색이 비쳤다.
+ * id 는 hp-home-hero 고정 — Logo.tsx uid 와 겹치면 안드로이드에서 채움이 섞인다.
  * pointerEvents="none" 는 Svg 가 아니라 감싸는 View 에 준다.
  */
-function HeroBackground({ top, bottom }: { top: string; bottom: string }) {
+function HeroBackground({ edge, bloom }: { edge: string; bloom: string }) {
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill}>
       <Svg style={StyleSheet.absoluteFill} viewBox="0 0 1 1" preserveAspectRatio="none">
         <Defs>
           <LinearGradient id="hp-home-hero" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={top} />
-            <Stop offset="1" stopColor={bottom} />
+            {/* 위 가장자리(라벨)는 edge, 숫자 자리(~0.24)에서 bloom, 예산 전에 다시 edge 로 가라앉는다 */}
+            <Stop offset="0" stopColor={edge} />
+            <Stop offset="0.12" stopColor={edge} />
+            <Stop offset="0.24" stopColor={bloom} />
+            <Stop offset="0.42" stopColor={edge} />
+            <Stop offset="1" stopColor={edge} />
           </LinearGradient>
         </Defs>
         <Rect x="0" y="0" width="1" height="1" fill="url(#hp-home-hero)" />

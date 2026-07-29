@@ -15,7 +15,6 @@ export const palette = {
   orange500: '#eb6834',
   orange600: '#c94e1f',
   orange700: '#a03c15',
-  orange800: '#802e0e',
 
   ink: '#1c1b1a',
   ink2: '#6f6d69',
