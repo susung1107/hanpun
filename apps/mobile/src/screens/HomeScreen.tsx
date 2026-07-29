@@ -43,10 +43,10 @@ import { cx } from '../theme/classes';
 import { useTheme } from '../theme/ThemeProvider';
 import { iconSize, iconStroke, layout, palette } from '../theme/tokens';
 
-// 메인 카드 — 그라데이션 없이 브랜드 오렌지 원톤. 흰 12px 글씨가 AA(4.5:1)를 넘어야 하므로
-// 라이트는 orange-600(#c94e1f, 4.57), 다크는 한 단계 깊은 orange-700(6.66)을 채움색으로 쓴다.
-// 브랜드 orange-500 위 흰 작은 글씨는 3.20 으로 미달이라 단색 채움에는 쓰지 않는다.
-const HERO_FILL_LIGHT = palette.orange600; // 흰 글씨 4.57
+// 메인 카드 — 브랜드 오렌지 원톤. 라이트는 브랜드색 그대로 orange-500(#eb6834), 다크는 orange-700.
+// ⚠️ orange-500 위 흰 12px 글씨는 대비 3.20 으로 AA(4.5:1) 미달 — 브랜드색을 우선한 의도된 선택이다.
+//    큰 숫자(36px)는 대형 텍스트라 3:1 을 넘어 읽히고, 라벨·예산 캡션은 미달을 감수한다.
+const HERO_FILL_LIGHT = palette.orange500; // 브랜드색 — 흰 작은 글씨 3.20 (AA 미달, 의도)
 const HERO_FILL_DARK = palette.orange700; // 흰 글씨 6.66
 const HERO_DIVIDER = 'rgba(255,255,255,0.16)'; // 예산 영역 구분선, 카드 면과 1.30
 const HERO_TRACK = 'rgba(0,0,0,0.20)'; // 카드 면 위 → 검정. 흰 막대와 6.65
