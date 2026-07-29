@@ -45,16 +45,16 @@ import { useTheme } from '../theme/ThemeProvider';
 import { iconStroke, layout, palette } from '../theme/tokens';
 
 /**
- * 메인 카드 — 홈에서 유일한 색 면. 밝은 브랜드 오렌지로 채운다.
- * 이 위에 흰 글씨는 대비 3.20 으로 AA(4.5:1) 미달이라, 글씨를 진한 브라운으로 쓴다(대비 4.9:1).
- * 투명도로 흐리면 대비가 무너지므로 카드 안 위계는 크기·굵기로만 만든다.
- * 라이트·다크 모두 같은 밝은 오렌지 — 이 카드는 앱 테마와 무관한 자기만의 색 면이다.
+ * 메인 카드 — 채도 높은 오렌지 슬래브 대신 은은한 웜 틴트 면.
+ * 색으로 소리치는 대신 살구빛 배경 + 큰 오렌지 숫자 + 브랜드 게이지로 위계를 만든다.
+ * 밝은 배경이라 글씨 대비 걱정이 없어 의미색(절약=초록/증가=빨강)도 그대로 쓸 수 있다.
  */
-const HERO_FILL = palette.orange500;
-const HERO_INK = '#3a1a0a'; // 밝은 오렌지 위 본문/숫자 — 대비 4.9:1
-const HERO_LINE = 'rgba(0,0,0,0.12)'; // 카드 안 구분선
-const HERO_PILL = 'rgba(255,255,255,0.28)'; // 전월 대비 알약 — 밝게 깔아 진한 글씨 대비 확보
-const HERO_TRACK = 'rgba(255,255,255,0.32)'; // 게이지 트랙 — 밝게, 진한 게이지가 잘 보이도록
+const HERO_BG_LIGHT = palette.orange50; // 부드러운 살구 아이보리
+const HERO_BG_DARK = palette.surfaceDark2; // 따뜻한 다크 면
+const HERO_BORDER_LIGHT = palette.orange100;
+const HERO_BORDER_DARK = palette.orangeBorderDark;
+const HERO_AMOUNT_LIGHT = palette.orange700; // 깊은 번트 오렌지 숫자
+const HERO_AMOUNT_DARK = palette.orangeAccentDark;
 
 const WEEK_BAR_HEIGHT = 52;
 
@@ -138,7 +138,7 @@ function buildUpcomingFixed(
 /** 홈 (디자인 home / empty-home) */
 export function HomeScreen() {
   const navigation = useAppNavigation();
-  const { tokens } = useTheme();
+  const { tokens, isDark } = useTheme();
   const month = toMonthKey(new Date());
   const [year, monthNumber] = month.split('-');
 
@@ -293,87 +293,73 @@ export function HomeScreen() {
             tintColor={tokens.ink3}
           />
         }>
-        {/* ① 메인 카드 — 홈에서 유일한 색 면. Card 는 bg-surface 를 강제하므로 View 로 만든다.
-            밝은 오렌지 위 글자는 전부 진한 브라운(HERO_INK) — 투명도로 흐리면 대비가 무너지므로
-            위계는 크기·굵기로만 만든다. isEmpty 여도 이 카드는 ₩0 과 안내 문구로 그려지고,
-            그 아래에 EmptyState 가 온다. */}
+        {/* ① 메인 카드 — 은은한 웜 틴트 면. 색으로 소리치지 않고 큰 오렌지 숫자와 게이지로 위계를 만든다.
+            밝은 배경이라 글씨 대비 걱정이 없어 의미색(절약/증가)도 그대로 쓴다.
+            isEmpty 여도 이 카드는 ₩0 과 안내 문구로 그려지고, 그 아래에 EmptyState 가 온다. */}
         <View
           style={{
             borderRadius: layout.cardRadius,
             padding: 20,
-            backgroundColor: HERO_FILL,
+            backgroundColor: isDark ? HERO_BG_DARK : HERO_BG_LIGHT,
+            borderWidth: 1,
+            borderColor: isDark ? HERO_BORDER_DARK : HERO_BORDER_LIGHT,
           }}>
-          <Text style={{ fontSize: 12.5, fontWeight: '600', color: HERO_INK }}>이번 달 총 지출</Text>
+          <Text className="text-[12.5px] font-semibold text-ink-3 dark:text-ink-dark-3">
+            이번 달 총 지출
+          </Text>
           <Text
             style={{
               marginTop: 6,
               fontSize: 36,
               fontWeight: '700',
-              color: HERO_INK,
               letterSpacing: -0.5,
+              color: isDark ? HERO_AMOUNT_DARK : HERO_AMOUNT_LIGHT,
             }}>
             {formatWon(totalExpense)}
           </Text>
 
           {isEmpty ? (
-            <Text style={{ marginTop: 10, fontSize: 12.5, color: HERO_INK }}>
+            <Text className="mt-[10px] text-[12.5px] text-ink-3 dark:text-ink-dark-3">
               기록을 남기면 이번 달 흐름이 여기 쌓여요
             </Text>
           ) : (
+            // 밝은 틴트 위라 톤(good/warn) 색을 그대로 쓴다 — 절약=초록, 증가=빨강.
             // compare.text 에 이미 ↓/↑ 화살표가 들어 있어 아이콘을 덧붙이지 않는다.
-            // 오렌지 위에서는 톤(good/warn)에 따른 글자색 구분을 하지 않는다 — 대비가 안 나오고,
-            // 절약/증가는 문구 자체가 이미 말하고 있다.
-            <View
+            <Text
+              className="mt-[10px] text-[12.5px] font-semibold"
               style={{
-                marginTop: 10,
-                alignSelf: 'flex-start',
-                borderRadius: 999,
-                backgroundColor: HERO_PILL,
-                paddingHorizontal: 10,
-                paddingVertical: 4,
+                color:
+                  compare.tone === 'good'
+                    ? tokens.good
+                    : compare.tone === 'warn'
+                      ? tokens.critical
+                      : tokens.ink2,
               }}>
-              <Text style={{ fontSize: 12, fontWeight: '600', color: HERO_INK }}>
-                {compare.text}
-              </Text>
-            </View>
+              {compare.text}
+            </Text>
           )}
 
-          <View style={{ marginTop: 16, height: 1, backgroundColor: HERO_LINE }} />
+          <View className="mt-[16px] h-[1px] bg-line dark:bg-line-dark" />
 
-          <View style={{ marginTop: 16 }}>
+          <View className="mt-[16px]">
             {totalBudget ? (
               <>
-                {/* 초과 경고는 아래 오른쪽 수치에서 한다 — 오렌지 면 위의 빨간 바는 둘 다 난색이라 안 보인다 */}
-                <ProgressBar
-                  ratio={budgetRatio}
-                  height={10}
-                  warnOnOver={false}
-                  color={HERO_INK}
-                  trackColor={HERO_TRACK}
-                />
+                {/* 브랜드 오렌지 게이지 + 기본 트랙. 예산 초과 시 warnOnOver 로 바가 빨개진다 */}
+                <ProgressBar ratio={budgetRatio} height={10} />
                 <View className="mt-[8px] flex-row items-center justify-between">
-                  <Text style={{ fontSize: 12, color: HERO_INK }}>
+                  <Text className="text-[12px] text-ink-2 dark:text-ink-dark-2">
                     {`예산 ${formatBudgetWon(totalBudget.budgetAmount)} 중 ${Math.round(
                       budgetRatio * 100,
                     )}%`}
                   </Text>
                   {remaining >= 0 ? (
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: HERO_INK }}>
+                    <Text className="text-[12px] font-bold text-ink dark:text-ink-dark">
                       {`잔여 ${formatAmountKo(remaining)}`}
                     </Text>
                   ) : (
-                    // 초과는 흰 알약 + 빨간 글씨로 뒤집어 강조한다 — 밝은 오렌지 위에서 흰 알약이 튄다
-                    <View
-                      style={{
-                        borderRadius: 999,
-                        backgroundColor: '#ffffff',
-                        paddingHorizontal: 8,
-                        paddingVertical: 2,
-                      }}>
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: palette.critical }}>
-                        {`초과 ${formatAmountKo(-remaining)}`}
-                      </Text>
-                    </View>
+                    <Text className="text-[12px] font-bold" style={{ color: tokens.critical }}>
+                      {`초과 ${formatAmountKo(-remaining)}`}
+                    </Text>
                   )}
                 </View>
               </>
@@ -382,7 +368,7 @@ export function HomeScreen() {
                 accessibilityRole="button"
                 onPress={() => navigation.navigate('Budget')}
                 className="active:opacity-70">
-                <Text style={{ fontSize: 13, fontWeight: '700', color: HERO_INK }}>
+                <Text className="text-[13px] font-bold text-orange-600 dark:text-orange-400">
                   예산 설정하기 ›
                 </Text>
               </Pressable>
