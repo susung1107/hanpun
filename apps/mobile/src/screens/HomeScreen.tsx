@@ -2,19 +2,23 @@ import {
   describeMonthOverMonth,
   formatAmountKo,
   formatNumber,
+  formatPercent,
   formatRelativeDay,
   formatTimeKo,
   formatWon,
+  getCategory,
   getCategoryLabel,
   toDateKey,
   toMonthKey,
 } from '@hanpun/shared';
-import { Bell, Receipt } from 'lucide-react-native';
+import type { RecurringRule } from '@hanpun/shared';
+import { Bell, ChevronRight, Receipt } from 'lucide-react-native';
 import React, { useEffect, useMemo } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 
 import {
   Card,
+  CategoryIcon,
   EmptyState,
   Fab,
   ListCard,
@@ -27,6 +31,7 @@ import {
 } from '../components';
 import { useBudgetProgress } from '../hooks/useBudgets';
 import { useUnreadNotificationCount } from '../hooks/useNotifications';
+import { useRecurringRules } from '../hooks/useRecurring';
 import { useMonthlyStats } from '../hooks/useStats';
 import { useMonthTransactions } from '../hooks/useTransactions';
 import { syncReminder } from '../lib/reminder';
@@ -35,6 +40,85 @@ import { useSettingsStore } from '../store/settingsStore';
 import { cx } from '../theme/classes';
 import { useTheme } from '../theme/ThemeProvider';
 import { iconStroke, palette } from '../theme/tokens';
+
+const WEEK_BAR_HEIGHT = 52;
+
+interface WeekBucket {
+  label: string;
+  expense: number;
+  current: boolean;
+}
+
+function buildWeekly(
+  days: { date: string; expense: number }[],
+  todayKey: string,
+): { weeks: WeekBucket[]; max: number } {
+  const count = Math.max(Math.ceil(days.length / 7), 1);
+  const weeks: WeekBucket[] = Array.from({ length: count }, (_, index) => ({
+    label: `${index + 1}주`,
+    expense: 0,
+    current: false,
+  }));
+  days.forEach(day => {
+    const dayOfMonth = Number(day.date.slice(8, 10));
+    const index = Math.min(Math.max(Math.floor((dayOfMonth - 1) / 7), 0), count - 1);
+    const bucket = weeks[index];
+    if (!bucket) {
+      return;
+    }
+    bucket.expense += day.expense;
+    if (day.date === todayKey) {
+      bucket.current = true;
+    }
+  });
+  return { weeks, max: Math.max(...weeks.map(week => week.expense), 1) };
+}
+
+const TOP_CATEGORY_COUNT = 3;
+
+const UPCOMING_PREVIEW = 3;
+
+interface UpcomingItem {
+  key: string;
+  title: string;
+  amount: number;
+  day: number;
+}
+
+function buildUpcomingFixed(
+  rules: RecurringRule[],
+  today: Date,
+): { items: UpcomingItem[]; total: number } {
+  const year = today.getFullYear();
+  const monthIndex = today.getMonth();
+  const lastDay = new Date(year, monthIndex + 1, 0).getDate();
+  const items: UpcomingItem[] = [];
+  rules
+    .filter(rule => rule.active && rule.type === 'expense')
+    .forEach(rule => {
+      const startsAt = new Date(rule.startsAt);
+      const endsAt = rule.endsAt ? new Date(rule.endsAt) : null;
+      // 31일 규칙이 30일까지인 달에서 사라지지 않도록 말일로 당긴다
+      const anchor = Math.min(rule.dayAnchor, lastDay);
+      for (let day = today.getDate() + 1; day <= lastDay; day += 1) {
+        const date = new Date(year, monthIndex, day);
+        if (date < startsAt || (endsAt && date > endsAt)) {
+          continue;
+        }
+        const hit =
+          rule.cycle === 'weekly'
+            ? date.getDay() === rule.dayAnchor
+            : rule.cycle === 'yearly'
+              ? day === anchor && monthIndex + 1 === (rule.month ?? 1)
+              : day === anchor;
+        if (hit) {
+          items.push({ key: `${rule.id}-${day}`, title: rule.title, amount: rule.amount, day });
+        }
+      }
+    });
+  items.sort((a, b) => a.day - b.day);
+  return { items, total: items.reduce((sum, item) => sum + item.amount, 0) };
+}
 
 /** 홈 (디자인 home / empty-home) */
 export function HomeScreen() {
@@ -47,6 +131,7 @@ export function HomeScreen() {
   const transactions = useMonthTransactions(month);
   const progress = useBudgetProgress(month);
   const unread = useUnreadNotificationCount();
+  const recurring = useRecurringRules();
 
   const reminderEnabled = useSettingsStore(state => state.reminderEnabled);
   const reminderTime = useSettingsStore(state => state.reminderTime);
@@ -81,6 +166,25 @@ export function HomeScreen() {
   const totalBudget = monthBudget && monthBudget.budgetAmount > 0 ? monthBudget : undefined;
   const budgetRatio = totalBudget ? totalBudget.spentAmount / totalBudget.budgetAmount : 0;
   const remaining = totalBudget ? totalBudget.budgetAmount - totalBudget.spentAmount : 0;
+
+  const weekly = useMemo(
+    () => buildWeekly(stats.data?.byDay ?? [], todayKey),
+    [stats.data?.byDay, todayKey],
+  );
+
+  const topCategories = useMemo(
+    () =>
+      (stats.data?.byCategory ?? [])
+        .filter(stat => getCategory(stat.categoryId).type === 'expense')
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, TOP_CATEGORY_COUNT),
+    [stats.data?.byCategory],
+  );
+
+  const upcoming = useMemo(
+    () => buildUpcomingFixed(recurring.data ?? [], new Date()),
+    [recurring.data],
+  );
 
   const recent = rows.slice(0, 3);
   const isEmpty = !transactions.isLoading && rows.length === 0;
@@ -154,6 +258,7 @@ export function HomeScreen() {
             tintColor={tokens.ink3}
           />
         }>
+        {/* 메인 카드 — 이번 달 총지출 + 전월 대비 두 줄만 (D-1) */}
         <Card large>
           <Text className="text-[12px] text-ink-3 dark:text-ink-dark-3">이번 달 총 지출</Text>
           <Text className="mt-[4px] text-[32px] font-bold text-ink dark:text-ink-dark">
@@ -162,24 +267,48 @@ export function HomeScreen() {
 
           {isEmpty ? (
             <Text className="mt-[6px] text-[12.5px] text-ink-3 dark:text-ink-dark-3">
-              예산을 설정하면 진행률이 여기 표시돼요
+              기록을 남기면 이번 달 흐름이 여기 쌓여요
             </Text>
           ) : (
-            <>
-              <Text
-                className="mt-[4px] text-caption font-semibold"
-                style={{
-                  color:
-                    compare.tone === 'good'
-                      ? tokens.good
-                      : compare.tone === 'warn'
-                        ? tokens.critical
-                        : tokens.ink2,
-                }}>
-                {compare.text}
-              </Text>
+            <Text
+              className="mt-[4px] text-caption font-semibold"
+              style={{
+                color:
+                  compare.tone === 'good'
+                    ? tokens.good
+                    : compare.tone === 'warn'
+                      ? tokens.critical
+                      : tokens.ink2,
+              }}>
+              {compare.text}
+            </Text>
+          )}
+        </Card>
 
-              <View className="mt-[12px] flex-row gap-[18px]">
+        {isEmpty ? (
+          <EmptyState
+            icon={Receipt}
+            title="아직 기록이 없어요"
+            description={'오른쪽 아래 + 버튼을 눌러\n오늘 첫 지출을 기록해보세요'}
+          />
+        ) : (
+          <>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => navigation.navigate('AddTransaction')}
+              className="mt-[14px] rounded-field border bg-orange-50 px-[16px] py-[12px] active:opacity-80 dark:bg-orange-500/10"
+              style={{ borderColor: isDark ? palette.orangeBorderDark : palette.orange100 }}>
+              <Text className="text-[13.5px] text-ink-2 dark:text-ink-dark-2">오늘 지출</Text>
+              <Text className="mt-[2px] text-body font-semibold text-orange-600 dark:text-orange-400">
+                {today.count > 0
+                  ? `${formatAmountKo(today.expense)} · ${today.count}건`
+                  : '아직 없어요 · 탭해서 기록하기'}
+              </Text>
+            </Pressable>
+
+            {/* 메인 카드에서 덜어낸 수입 · 수지 · 예산 (D-1) */}
+            <Card className="mt-[14px]">
+              <View className="flex-row gap-[18px]">
                 <Text className={cx.caption}>
                   수입{' '}
                   <Text style={{ color: tokens.good, fontWeight: '600' }}>
@@ -222,39 +351,125 @@ export function HomeScreen() {
                   </Text>
                 </Pressable>
               )}
-            </>
-          )}
-        </Card>
+            </Card>
 
-        {isEmpty ? (
-          <EmptyState
-            icon={Receipt}
-            title="아직 기록이 없어요"
-            description={'오른쪽 아래 + 버튼을 눌러\n오늘 첫 지출을 기록해보세요'}
-          />
-        ) : (
-          <>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => navigation.navigate('AddTransaction')}
-              className="mt-[14px] rounded-field border bg-orange-50 px-[16px] py-[12px] active:opacity-80 dark:bg-orange-500/10"
-              style={{ borderColor: isDark ? palette.orangeBorderDark : palette.orange100 }}>
-              <Text className="text-[13.5px] text-ink-2 dark:text-ink-dark-2">오늘 지출</Text>
-              <Text className="mt-[2px] text-body font-semibold text-orange-600 dark:text-orange-400">
-                {today.count > 0
-                  ? `${formatAmountKo(today.expense)} · ${today.count}건`
-                  : '아직 없어요 · 탭해서 기록하기'}
-              </Text>
-            </Pressable>
+            {/* 주간 지출 미니 막대 (D-2) */}
+            <Card className="mt-[14px]">
+              <Text className={cx.sectionTitle}>주간 지출</Text>
+              <View
+                className="mt-[16px] flex-row items-end gap-[10px]"
+                style={{ height: WEEK_BAR_HEIGHT }}>
+                {weekly.weeks.map(week => {
+                  const barColor =
+                    week.expense === 0
+                      ? tokens.chartEmpty
+                      : week.current
+                        ? palette.orange500
+                        : palette.orange300;
+                  const barHeight = Math.max((week.expense / weekly.max) * WEEK_BAR_HEIGHT, 3);
+                  return (
+                    <View key={week.label} className="flex-1 items-center justify-end">
+                      <View
+                        style={{
+                          width: '100%',
+                          height: barHeight,
+                          borderRadius: 6,
+                          backgroundColor: barColor,
+                        }}
+                      />
+                    </View>
+                  );
+                })}
+              </View>
+              <View className="mt-[8px] flex-row gap-[10px]">
+                {weekly.weeks.map(week => (
+                  <Text
+                    key={week.label}
+                    className="flex-1 text-center text-[11px] text-ink-3 dark:text-ink-dark-3">
+                    {week.label}
+                  </Text>
+                ))}
+              </View>
+            </Card>
 
-            <View className="mb-[8px] mt-[18px] flex-row items-center justify-between">
+            {/* 많이 쓴 카테고리 TOP 3 (D-2) */}
+            {topCategories.length > 0 ? (
+              <Card className="mt-[14px]">
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="통계 화면으로 이동"
+                  onPress={() => navigation.navigate('Tabs', { screen: 'Stats' })}
+                  className="flex-row items-center justify-between active:opacity-70">
+                  <Text className={cx.sectionTitle}>많이 쓴 카테고리</Text>
+                  <ChevronRight size={18} strokeWidth={iconStroke.default} color={tokens.ink3} />
+                </Pressable>
+                <View className="mt-[8px]">
+                  {topCategories.map(stat => (
+                    <View
+                      key={stat.categoryId}
+                      className="mt-[10px] flex-row items-center gap-[12px]">
+                      <CategoryIcon
+                        categoryId={stat.categoryId}
+                        size={34}
+                        iconSize={17}
+                        radius={10}
+                      />
+                      <View className="flex-1">
+                        <Text className="text-[14px] font-medium text-ink dark:text-ink-dark">
+                          {getCategory(stat.categoryId).label}
+                        </Text>
+                        <Text className="mt-[1px] text-[11.5px] text-ink-3 dark:text-ink-dark-3">
+                          {`비중 ${formatPercent(stat.ratio)}`}
+                        </Text>
+                      </View>
+                      <Text className="text-body font-semibold text-ink dark:text-ink-dark">
+                        {formatAmountKo(stat.amount)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </Card>
+            ) : null}
+
+            {/* 이번 달 남은 고정지출 — 남은 예정이 없으면 카드를 그리지 않는다 (D-2) */}
+            {upcoming.items.length > 0 ? (
+              <Card className="mt-[14px]">
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="고정지출 화면으로 이동"
+                  onPress={() => navigation.navigate('Recurring')}
+                  className="flex-row items-center justify-between active:opacity-70">
+                  <Text className={cx.sectionTitle}>이번 달 남은 고정지출</Text>
+                  <ChevronRight size={18} strokeWidth={iconStroke.default} color={tokens.ink3} />
+                </Pressable>
+                <Text className="mt-[8px] text-[20px] font-bold text-ink dark:text-ink-dark">
+                  {formatAmountKo(upcoming.total)}
+                </Text>
+                <View className="mt-[12px] gap-[10px]">
+                  {upcoming.items.slice(0, UPCOMING_PREVIEW).map(item => (
+                    <View key={item.key} className="flex-row items-center justify-between">
+                      <View className="flex-row items-center gap-[10px]">
+                        <View
+                          className="rounded-[8px] px-[8px] py-[3px]"
+                          style={{ backgroundColor: tokens.neutralTint }}>
+                          <Text className="text-[12px] font-semibold text-ink-2 dark:text-ink-dark-2">
+                            {`${item.day}일`}
+                          </Text>
+                        </View>
+                        <Text className="text-[14px] text-ink dark:text-ink-dark">{item.title}</Text>
+                      </View>
+                      <Text className="text-[13.5px] font-semibold text-ink dark:text-ink-dark">
+                        {formatAmountKo(item.amount)}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </Card>
+            ) : null}
+
+            {/* 최근 내역 — 제목만 두고 전체보기는 리스트 아래로 (D-3) */}
+            <View className="mb-[8px] mt-[18px]">
               <Text className={cx.sectionTitle}>최근 내역</Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => navigation.navigate('Transactions', { month })}
-                hitSlop={6}>
-                <Text className="text-[12px] text-ink-3 dark:text-ink-dark-3">전체보기 ›</Text>
-              </Pressable>
             </View>
 
             <ListCard className="px-[14px]">
@@ -271,6 +486,16 @@ export function HomeScreen() {
                 />
               ))}
             </ListCard>
+
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="이번 달 전체 내역 보기"
+              onPress={() => navigation.navigate('Transactions', { month })}
+              className="mt-[10px] items-center rounded-field border border-line bg-surface py-[12px] active:opacity-70 dark:border-line-dark dark:bg-surface-dark">
+              <Text className="text-[13px] font-semibold text-ink-2 dark:text-ink-dark-2">
+                전체 내역 보기
+              </Text>
+            </Pressable>
           </>
         )}
       </ScrollView>
@@ -284,30 +509,14 @@ function HomeSkeleton() {
   return (
     // 스크린리더에는 이 컨테이너 하나만 "불러오는 중"으로 읽힌다 (조각은 Skeleton 내부에서 접근성 숨김 처리)
     <View accessibilityRole="progressbar" accessibilityLabel="불러오는 중">
-      {/* 요약 카드 — Card large 와 같은 radius 18 */}
+      {/* 슬림 요약 카드 — 라벨 → 32px 대형 금액 → 전월 대비 한 줄 (Card large radius 18) */}
       <SkeletonCard>
-        {/* '이번 달 총 지출' 라벨 → 32px 대형 금액 → 전월 대비 한 줄 */}
         <Skeleton width={84} height={11} />
         <View className="mt-[8px]">
           <Skeleton width="62%" height={30} radius={8} />
         </View>
         <View className="mt-[10px]">
           <Skeleton width="46%" height={12} />
-        </View>
-
-        {/* 수입 · 수지 두 칸 */}
-        <View className="mt-[14px] flex-row gap-[18px]">
-          <Skeleton width={92} height={12} />
-          <Skeleton width={92} height={12} />
-        </View>
-
-        {/* 예산 진행바 — ProgressBar 기본 height 8 / radius 4 와 같은 크기 */}
-        <View className="mt-[14px]">
-          <Skeleton height={8} radius={4} />
-        </View>
-        <View className="mt-[8px] flex-row justify-between">
-          <Skeleton width={116} height={11} />
-          <Skeleton width={78} height={11} />
         </View>
       </SkeletonCard>
 
@@ -316,10 +525,49 @@ function HomeSkeleton() {
         <Skeleton height={62} radius={14} />
       </View>
 
-      {/* '최근 내역' 제목 + '전체보기 ›' */}
-      <View className="mb-[8px] mt-[18px] flex-row items-center justify-between">
+      {/* 살림 카드 — 수입 · 수지 두 칸 + 예산 진행바 */}
+      <View className="mt-[14px]">
+        <SkeletonCard>
+          <View className="flex-row gap-[18px]">
+            <Skeleton width={92} height={12} />
+            <Skeleton width={92} height={12} />
+          </View>
+          {/* ProgressBar 기본 height 8 / radius 4 와 같은 크기 */}
+          <View className="mt-[14px]">
+            <Skeleton height={8} radius={4} />
+          </View>
+          <View className="mt-[8px] flex-row justify-between">
+            <Skeleton width={116} height={11} />
+            <Skeleton width={78} height={11} />
+          </View>
+        </SkeletonCard>
+      </View>
+
+      {/* 주간 차트 카드 — 제목 + 막대 영역(WEEK_BAR_HEIGHT) */}
+      <View className="mt-[14px]">
+        <SkeletonCard>
+          <Skeleton width={64} height={13} />
+          <View className="mt-[16px]">
+            <Skeleton height={WEEK_BAR_HEIGHT} radius={8} />
+          </View>
+        </SkeletonCard>
+      </View>
+
+      {/* 카테고리 3줄 카드 */}
+      <View className="mt-[14px]">
+        <SkeletonCard>
+          <Skeleton width={96} height={13} />
+          <View className="mt-[6px]">
+            {[0, 1, 2].map(index => (
+              <SkeletonRow key={index} divider={false} />
+            ))}
+          </View>
+        </SkeletonCard>
+      </View>
+
+      {/* '최근 내역' 제목 (전체보기 칩 없음) */}
+      <View className="mb-[8px] mt-[18px]">
         <Skeleton width={64} height={14} />
-        <Skeleton width={52} height={11} />
       </View>
 
       {/* 홈은 최근 3건만 보여주므로 스켈레톤도 정확히 3줄 (구분선은 ListCard 가 넣는다) */}
@@ -328,6 +576,11 @@ function HomeSkeleton() {
           <SkeletonRow key={index} divider={false} />
         ))}
       </ListCard>
+
+      {/* 42px 전체보기 블록 */}
+      <View className="mt-[10px]">
+        <Skeleton height={42} radius={12} />
+      </View>
     </View>
   );
 }
