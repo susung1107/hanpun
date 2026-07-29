@@ -15,8 +15,7 @@ import {
 import type { RecurringRule } from '@hanpun/shared';
 import { Bell, CalendarCheck, ChevronRight, Receipt } from 'lucide-react-native';
 import React, { useEffect, useMemo } from 'react';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 
 import {
   Card,
@@ -44,13 +43,11 @@ import { cx } from '../theme/classes';
 import { useTheme } from '../theme/ThemeProvider';
 import { iconSize, iconStroke, layout, palette } from '../theme/tokens';
 
-// 메인 카드 — 가장자리(라벨·예산)는 orange-600 으로 흰 12px 글씨 대비(4.57)를 지키고,
-// 총지출 숫자 자리에만 브랜드 오렌지(orange-500)를 번지게 한다. 큰 숫자는 대형 텍스트라
-// 3:1 만 넘으면 되므로 브랜드색 위(3.20)에서도 읽힌다. 다크는 한 단계 깊게(가장자리 700 / 번짐 600).
-const HERO_EDGE_LIGHT = palette.orange600; // 카드 가장자리 — 흰 글씨 4.57
-const HERO_BLOOM_LIGHT = palette.orange500; // 숫자 뒤 브랜드 오렌지 번짐
-const HERO_EDGE_DARK = palette.orange700;
-const HERO_BLOOM_DARK = palette.orange600;
+// 메인 카드 — 그라데이션 없이 브랜드 오렌지 원톤. 흰 12px 글씨가 AA(4.5:1)를 넘어야 하므로
+// 라이트는 orange-600(#c94e1f, 4.57), 다크는 한 단계 깊은 orange-700(6.66)을 채움색으로 쓴다.
+// 브랜드 orange-500 위 흰 작은 글씨는 3.20 으로 미달이라 단색 채움에는 쓰지 않는다.
+const HERO_FILL_LIGHT = palette.orange600; // 흰 글씨 4.57
+const HERO_FILL_DARK = palette.orange700; // 흰 글씨 6.66
 const HERO_DIVIDER = 'rgba(255,255,255,0.16)'; // 예산 영역 구분선, 카드 면과 1.30
 const HERO_TRACK = 'rgba(0,0,0,0.20)'; // 카드 면 위 → 검정. 흰 막대와 6.65
 const HERO_PILL = 'rgba(0,0,0,0.18)'; // 흰 글씨 7.92
@@ -306,20 +303,13 @@ export function HomeScreen() {
             tintColor={tokens.ink3}
           />
         }>
-        {/* ① 메인 카드 — 위(진함)→아래(브랜드 색) 세로 그라데이션. 흰 글씨는 전부 대비 통과(상단 상수 주석).
-            예산 영역은 어두운 패널로 덮어 그 위 흰 글씨 대비까지 만든다.
-            isEmpty 여도 이 카드는 ₩0 과 안내 문구로 그려지고, 그 아래에 EmptyState 가 온다. */}
+        {/* ① 메인 카드 — 브랜드 오렌지 원톤(라이트 600 / 다크 700). 흰 글씨 위계는 크기·굵기로만.
+            isEmpty 여도 이 카드는 0원 과 안내 문구로 그려지고, 그 아래에 EmptyState 가 온다. */}
         <View
           style={{
             borderRadius: layout.cardRadius,
-            overflow: 'hidden', // SVG 사각형을 카드 모서리에 맞춰 자른다
-            backgroundColor: isDark ? HERO_EDGE_DARK : HERO_EDGE_LIGHT, // SVG 그려지기 전 한 프레임 안전판
+            backgroundColor: isDark ? HERO_FILL_DARK : HERO_FILL_LIGHT,
           }}>
-          <HeroBackground
-            edge={isDark ? HERO_EDGE_DARK : HERO_EDGE_LIGHT}
-            bloom={isDark ? HERO_BLOOM_DARK : HERO_BLOOM_LIGHT}
-          />
-          {/* 패딩은 안쪽 View 에 준다 — 바깥에 주면 그라데이션이 패딩만큼 안으로 들어간다 */}
           <View style={{ padding: 20 }}>
             <Text style={{ fontSize: 12.5, fontWeight: '600', color: '#ffffff' }}>
               이번 달 총 지출
@@ -823,36 +813,6 @@ function HomeSkeleton() {
       <View className="mt-[10px]">
         <Skeleton height={42} radius={12} />
       </View>
-    </View>
-  );
-}
-
-/**
- * 메인 카드 배경 — 가장자리는 edge(orange-600), 총지출 숫자 자리(위쪽)에만 bloom(브랜드 오렌지)이
- * 번졌다 다시 가라앉는다. 라벨(맨 위)과 예산(아래)은 edge 위라 흰 글씨 대비(4.57)가 유지되고,
- * 브랜드색은 큰 숫자 뒤에서만 보인다. expo 미사용이라 이미 설치된 react-native-svg 로 그린다.
- *
- * viewBox 0~1 정규 좌표 + preserveAspectRatio="none" 로 카드 높이에 무관하게 꽉 채운다(4차 수정).
- * width/height="100%" 는 부모 확정 높이가 없으면 짧게 잡혀 배경색이 비쳤다.
- * id 는 hp-home-hero 고정 — Logo.tsx uid 와 겹치면 안드로이드에서 채움이 섞인다.
- * pointerEvents="none" 는 Svg 가 아니라 감싸는 View 에 준다.
- */
-function HeroBackground({ edge, bloom }: { edge: string; bloom: string }) {
-  return (
-    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-      <Svg style={StyleSheet.absoluteFill} viewBox="0 0 1 1" preserveAspectRatio="none">
-        <Defs>
-          <LinearGradient id="hp-home-hero" x1="0" y1="0" x2="0" y2="1">
-            {/* 위 가장자리(라벨)는 edge, 숫자 자리(~0.24)에서 bloom, 예산 전에 다시 edge 로 가라앉는다 */}
-            <Stop offset="0" stopColor={edge} />
-            <Stop offset="0.12" stopColor={edge} />
-            <Stop offset="0.24" stopColor={bloom} />
-            <Stop offset="0.42" stopColor={edge} />
-            <Stop offset="1" stopColor={edge} />
-          </LinearGradient>
-        </Defs>
-        <Rect x="0" y="0" width="1" height="1" fill="url(#hp-home-hero)" />
-      </Svg>
     </View>
   );
 }
