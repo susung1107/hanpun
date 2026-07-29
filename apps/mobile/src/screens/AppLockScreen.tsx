@@ -2,13 +2,12 @@ import { ScanFace } from 'lucide-react-native';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, AppState, type AppStateStatus, Pressable, Text, View } from 'react-native';
 
-import { LogoMark } from '../components';
+import { LogoBadge } from '../components';
 import { usePressed } from '../hooks/usePressed';
 import { authenticate, describeBiometry, getBiometryKind, type BiometryKind } from '../lib/biometrics';
 import { useAuthStore } from '../store/authStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { useTheme } from '../theme/ThemeProvider';
-import { palette } from '../theme/tokens';
 
 /**
  * 잠금을 풀 수 없을 때의 유일한 탈출구.
@@ -76,18 +75,7 @@ export function AppLockScreen({ onUnlock }: { onUnlock: () => void }) {
 
   return (
     <View className="flex-1 items-center justify-center bg-page px-[40px] dark:bg-page-dark">
-      <View
-        style={{
-          width: 72,
-          height: 72,
-          borderRadius: 22,
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden',
-          backgroundColor: palette.orange500,
-        }}>
-        <LogoMark size={48} />
-      </View>
+      <LogoBadge size={72} radius={22} />
 
       <Text className="mt-[22px] text-[19px] font-bold text-ink dark:text-ink-dark">잠금 해제</Text>
       <Text
