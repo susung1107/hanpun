@@ -57,7 +57,7 @@ const HERO_BOTTOM_LIGHT = palette.orange500; // 브랜드 색
 const HERO_TOP_DARK = palette.orange700; // 흰 글씨 6.66
 const HERO_BOTTOM_DARK = palette.orange600;
 const HERO_PANEL = 'rgba(0,0,0,0.22)'; // 최악점(브랜드 색 위) 기준 흰 글씨 4.97
-const HERO_TRACK = 'rgba(0,0,0,0.22)'; // 패널 위 겹침 → 흰 막대 7.24
+const HERO_TRACK = 'rgba(255,255,255,0.22)'; // 흰 막대와 3.38, 패널과 1.47 (검정 위 검정 겹침 방지)
 const HERO_PILL = 'rgba(0,0,0,0.18)'; // 흰 글씨 5.61
 
 const WEEK_BAR_HEIGHT = 52;
