@@ -15,6 +15,7 @@ import {
   EmptyState,
   getCategoryIcon,
   MonthNav,
+  MonthPickerSheet,
   Screen,
   SegmentedControl,
   Skeleton,
@@ -49,8 +50,9 @@ const MONTH_BAR_RATIOS = [
 export function StatsScreen() {
   const { tokens } = useTheme();
   const [range, setRange] = useState<Range>('month');
-  const { month, goPrev, goNext, canGoNext } = useMonthNavigation();
+  const { month, setMonth, goPrev, goNext, canGoNext } = useMonthNavigation();
   const [year, setYear] = useState(() => new Date().getFullYear());
+  const [picker, setPicker] = useState(false);
 
   const label =
     range === 'month' ? formatMonthLong(month) : `${year}년`;
@@ -61,7 +63,13 @@ export function StatsScreen() {
         title="통계"
         right={
           range === 'month' ? (
-            <MonthNav label={label} onPrev={goPrev} onNext={goNext} canGoNext={canGoNext} />
+            <MonthNav
+              label={label}
+              onPrev={goPrev}
+              onNext={goNext}
+              canGoNext={canGoNext}
+              onPressLabel={() => setPicker(true)}
+            />
           ) : (
             <MonthNav
               label={label}
@@ -90,6 +98,22 @@ export function StatsScreen() {
           {range === 'month' ? '카테고리 막대는 예산 대비 사용률이에요' : '연간은 월별 지출 합계 기준이에요'}
         </Text>
       </ScrollView>
+
+      <MonthPickerSheet
+        visible={picker}
+        title="달 선택"
+        year={Number(month.slice(0, 4))}
+        month={Number(month.slice(5, 7))}
+        onClose={() => setPicker(false)}
+        onConfirm={(pickedYear, pickedMonth) => {
+          setPicker(false);
+          const key = `${pickedYear}-${String(pickedMonth).padStart(2, '0')}`;
+          // 미래 달은 볼 게 없으니 이번 달을 넘기지 않는다
+          const now = new Date();
+          const capped = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+          setMonth(key > capped ? capped : key);
+        }}
+      />
     </Screen>
   );
 }
