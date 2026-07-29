@@ -16,7 +16,8 @@ import {
 import type { RecurringRule } from '@hanpun/shared';
 import { Bell, CalendarCheck, ChevronRight, Receipt } from 'lucide-react-native';
 import React, { useEffect, useMemo } from 'react';
-import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 
 import {
   Card,
@@ -42,16 +43,22 @@ import { useAppNavigation } from '../navigation/hooks';
 import { useSettingsStore } from '../store/settingsStore';
 import { cx } from '../theme/classes';
 import { useTheme } from '../theme/ThemeProvider';
-import { iconStroke, layout, palette } from '../theme/tokens';
+import { iconSize, iconStroke, layout, palette } from '../theme/tokens';
 
 /**
  * 메인 카드 채움 색 — 임의로 바꾸지 마라, 대비 계산 결과다.
- * orange-500 위 흰 글씨는 대비 3.20 으로 AA(4.5:1) 미달. orange-600=4.57, orange-700=6.66.
- * 게이지 트랙도 흰 반투명(대비 2.93)이 아니라 검정 반투명(6.27)이라야 어디까지 찼는지 보인다.
+ * 브랜드 orange-500 위 흰 글씨는 대비 3.20 으로 AA(4.5:1) 미달. 더 밝으면서 4.5:1 인 오렌지는 없다.
+ * 그래서 위(진함)→아래(브랜드 색)로 밝아지는 세로 그라데이션으로 간다. 작은 글씨(라벨)는 맨 위에,
+ * 아래쪽 작은 글씨는 어두운 패널이 덮으므로 이 방향이라야 알약 하나 없이 전부 통과한다.
+ * 방향을 뒤집지 마라 — 밝음→어두움이면 최상단 라벨 대비가 3.20 으로 떨어진다.
  */
-const HERO_FILL_LIGHT = palette.orange600;
-const HERO_FILL_DARK = palette.orange700;
-const HERO_TRACK = 'rgba(0,0,0,0.20)';
+const HERO_TOP_LIGHT = palette.orange600; // 흰 글씨 4.57
+const HERO_BOTTOM_LIGHT = palette.orange500; // 브랜드 색
+const HERO_TOP_DARK = palette.orange700; // 흰 글씨 6.66
+const HERO_BOTTOM_DARK = palette.orange600;
+const HERO_PANEL = 'rgba(0,0,0,0.22)'; // 최악점(브랜드 색 위) 기준 흰 글씨 4.97
+const HERO_TRACK = 'rgba(0,0,0,0.22)'; // 패널 위 겹침 → 흰 막대 7.24
+const HERO_PILL = 'rgba(0,0,0,0.18)'; // 흰 글씨 5.61
 
 const WEEK_BAR_HEIGHT = 52;
 
@@ -87,6 +94,8 @@ function buildWeekly(
 }
 
 const TOP_CATEGORY_COUNT = 3;
+
+const BIG_EXPENSE_COUNT = 5;
 
 const UPCOMING_PREVIEW = 3;
 
@@ -218,6 +227,17 @@ export function HomeScreen() {
     [recurring.data],
   );
 
+  // 이번 달 큰 지출 — 금액순. rows 에 이미 이번 달 거래가 다 있어 추가 호출이 없다.
+  // filter 가 새 배열을 만드므로 sort 가 원본(rows/쿼리 캐시)을 건드리지 않는다.
+  const bigExpenses = useMemo(
+    () =>
+      rows
+        .filter(row => row.type === 'expense')
+        .sort((a, b) => b.amount - a.amount)
+        .slice(0, BIG_EXPENSE_COUNT),
+    [rows],
+  );
+
   const recent = rows.slice(0, 3);
   const isEmpty = !transactions.isLoading && rows.length === 0;
 
@@ -290,99 +310,114 @@ export function HomeScreen() {
             tintColor={tokens.ink3}
           />
         }>
-        {/* ① 메인 카드 — 홈에서 유일한 색 면. Card 는 bg-surface 를 강제하므로 View 로 만든다.
-            카드 안 글자는 전부 순백(#fff)이고 위계는 크기·굵기로만 만든다 — 투명도를 쓰면 대비가 무너진다.
+        {/* ① 메인 카드 — 위(진함)→아래(브랜드 색) 세로 그라데이션. 흰 글씨는 전부 대비 통과(상단 상수 주석).
+            예산 영역은 어두운 패널로 덮어 그 위 흰 글씨 대비까지 만든다.
             isEmpty 여도 이 카드는 ₩0 과 안내 문구로 그려지고, 그 아래에 EmptyState 가 온다. */}
         <View
           style={{
             borderRadius: layout.cardRadius,
-            padding: 20,
-            backgroundColor: isDark ? HERO_FILL_DARK : HERO_FILL_LIGHT,
+            overflow: 'hidden', // SVG 사각형을 카드 모서리에 맞춰 자른다
+            backgroundColor: isDark ? HERO_TOP_DARK : HERO_TOP_LIGHT, // SVG 그려지기 전 한 프레임 안전판
           }}>
-          <Text style={{ fontSize: 12.5, fontWeight: '600', color: '#ffffff' }}>이번 달 총 지출</Text>
-          <Text
-            style={{
-              marginTop: 6,
-              fontSize: 36,
-              fontWeight: '700',
-              color: '#ffffff',
-              letterSpacing: -0.5,
-            }}>
-            {formatWon(totalExpense)}
-          </Text>
-
-          {isEmpty ? (
-            <Text style={{ marginTop: 10, fontSize: 12.5, color: '#ffffff' }}>
-              기록을 남기면 이번 달 흐름이 여기 쌓여요
+          <HeroBackground
+            top={isDark ? HERO_TOP_DARK : HERO_TOP_LIGHT}
+            bottom={isDark ? HERO_BOTTOM_DARK : HERO_BOTTOM_LIGHT}
+          />
+          {/* 패딩은 안쪽 View 에 준다 — 바깥에 주면 그라데이션이 패딩만큼 안으로 들어간다 */}
+          <View style={{ padding: 20 }}>
+            <Text style={{ fontSize: 12.5, fontWeight: '600', color: '#ffffff' }}>
+              이번 달 총 지출
             </Text>
-          ) : (
-            // compare.text 에 이미 ↓/↑ 화살표가 들어 있어 아이콘을 덧붙이지 않는다.
-            // 오렌지 위에서는 톤(good/warn)에 따른 글자색 구분을 하지 않는다 — 대비가 안 나오고,
-            // 절약/증가는 문구 자체가 이미 말하고 있다.
+            <Text
+              style={{
+                marginTop: 6,
+                fontSize: 36,
+                fontWeight: '700',
+                color: '#ffffff',
+                letterSpacing: -0.5,
+              }}>
+              {formatWon(totalExpense)}
+            </Text>
+
+            {isEmpty ? (
+              <Text style={{ marginTop: 10, fontSize: 12.5, color: '#ffffff' }}>
+                기록을 남기면 이번 달 흐름이 여기 쌓여요
+              </Text>
+            ) : (
+              // compare.text 에 이미 ↓/↑ 화살표가 들어 있어 아이콘을 덧붙이지 않는다.
+              // 오렌지 위에서는 톤(good/warn)에 따른 글자색 구분을 하지 않는다 — 대비가 안 나오고,
+              // 절약/증가는 문구 자체가 이미 말하고 있다.
+              <View
+                style={{
+                  marginTop: 10,
+                  alignSelf: 'flex-start',
+                  borderRadius: 999,
+                  backgroundColor: HERO_PILL,
+                  paddingHorizontal: 10,
+                  paddingVertical: 4,
+                }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: '#ffffff' }}>
+                  {compare.text}
+                </Text>
+              </View>
+            )}
+
+            {/* 예산 패널 — 어두운 판이 흰 구분선을 대신하고 그 위 흰 글씨 대비를 만든다.
+                totalBudget 유무와 무관하게 패널은 항상 그린다 — 있다 없다 하면 카드 높이가 튄다 */}
             <View
               style={{
-                marginTop: 10,
-                alignSelf: 'flex-start',
-                borderRadius: 999,
-                backgroundColor: 'rgba(0,0,0,0.18)',
-                paddingHorizontal: 10,
-                paddingVertical: 4,
+                marginTop: 16,
+                borderRadius: 14,
+                paddingHorizontal: 14,
+                paddingVertical: 13,
+                backgroundColor: HERO_PANEL,
               }}>
-              <Text style={{ fontSize: 12, fontWeight: '600', color: '#ffffff' }}>
-                {compare.text}
-              </Text>
-            </View>
-          )}
-
-          <View style={{ marginTop: 16, height: 1, backgroundColor: 'rgba(255,255,255,0.22)' }} />
-
-          <View style={{ marginTop: 16 }}>
-            {totalBudget ? (
-              <>
-                {/* 초과 경고는 아래 오른쪽 수치에서 한다 — 오렌지 면 위의 빨간 바는 둘 다 난색이라 안 보인다 */}
-                <ProgressBar
-                  ratio={budgetRatio}
-                  height={10}
-                  warnOnOver={false}
-                  color="#ffffff"
-                  trackColor={HERO_TRACK}
-                />
-                <View className="mt-[8px] flex-row items-center justify-between">
-                  <Text style={{ fontSize: 12, color: '#ffffff' }}>
-                    {`예산 ${formatBudgetWon(totalBudget.budgetAmount)} 중 ${Math.round(
-                      budgetRatio * 100,
-                    )}%`}
-                  </Text>
-                  {remaining >= 0 ? (
-                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#ffffff' }}>
-                      {`잔여 ${formatAmountKo(remaining)}`}
+              {totalBudget ? (
+                <>
+                  <ProgressBar
+                    ratio={budgetRatio}
+                    height={10}
+                    warnOnOver={false}
+                    color="#ffffff"
+                    trackColor={HERO_TRACK}
+                  />
+                  <View className="mt-[8px] flex-row items-center justify-between">
+                    <Text style={{ fontSize: 12, color: '#ffffff' }}>
+                      {`예산 ${formatBudgetWon(totalBudget.budgetAmount)} 중 ${Math.round(
+                        budgetRatio * 100,
+                      )}%`}
                     </Text>
-                  ) : (
-                    // 초과는 흰 알약 + 빨간 글씨로 뒤집어 강조한다
-                    <View
-                      style={{
-                        borderRadius: 999,
-                        backgroundColor: '#ffffff',
-                        paddingHorizontal: 8,
-                        paddingVertical: 2,
-                      }}>
-                      <Text style={{ fontSize: 12, fontWeight: '700', color: palette.critical }}>
-                        {`초과 ${formatAmountKo(-remaining)}`}
+                    {remaining >= 0 ? (
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#ffffff' }}>
+                        {`잔여 ${formatAmountKo(remaining)}`}
                       </Text>
-                    </View>
-                  )}
-                </View>
-              </>
-            ) : (
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => navigation.navigate('Budget')}
-                className="active:opacity-70">
-                <Text style={{ fontSize: 13, fontWeight: '700', color: '#ffffff' }}>
-                  예산 설정하기 ›
-                </Text>
-              </Pressable>
-            )}
+                    ) : (
+                      // 초과는 흰 알약 + 빨간 글씨로 뒤집어 강조한다
+                      <View
+                        style={{
+                          borderRadius: 999,
+                          backgroundColor: '#ffffff',
+                          paddingHorizontal: 8,
+                          paddingVertical: 2,
+                        }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: palette.critical }}>
+                          {`초과 ${formatAmountKo(-remaining)}`}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </>
+              ) : (
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => navigation.navigate('Budget')}
+                  className="active:opacity-70">
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#ffffff' }}>
+                    예산 설정하기 ›
+                  </Text>
+                </Pressable>
+              )}
+            </View>
           </View>
         </View>
 
@@ -394,7 +429,7 @@ export function HomeScreen() {
           />
         ) : (
           <>
-            {/* ② 오늘 지출 — 색 배너를 없애고 중립 카드 행으로 (홈의 색 면은 메인 카드 하나) */}
+            {/* ② 오늘 지출 + 수입·수지 — 한 장으로 통합. 위 오늘지출 / 카드 폭 가로 구분선 / 아래 수입·수지 */}
             <Card className="mt-[14px]" padded={false}>
               <Pressable
                 accessibilityRole="button"
@@ -435,11 +470,11 @@ export function HomeScreen() {
                   </Text>
                 )}
               </Pressable>
-            </Card>
 
-            {/* ③ 수입 · 수지 — 메인 카드에서 빼내 StatTile 로 크게 */}
-            <Card className="mt-[14px]" padded={false}>
-              <View className="flex-row items-center px-[16px] py-[16px]">
+              {/* 가로 구분선 — 좌우 패딩 없이 카드 폭 전체를 가로질러 두 영역을 가른다 */}
+              <View style={{ height: 1, backgroundColor: tokens.line }} />
+
+              <View className="flex-row items-center px-[16px] py-[14px]">
                 <StatTile label="수입" value={`+${formatNumber(totalIncome)}`} color={tokens.good} />
                 <View
                   style={{
@@ -500,6 +535,67 @@ export function HomeScreen() {
                     </View>
                   ))}
                 </View>
+              </Card>
+            ) : null}
+
+            {/* ④ 이번 달 큰 지출 TOP 5 — 금액순. 최근 내역(시간순)과 축이 다르므로 둘 다 남는다.
+                순위 칩이 아이콘 자리를 대신한다 — CategoryIcon·TransactionRow 를 쓰지 않는 게 요점 */}
+            {bigExpenses.length > 0 ? (
+              <Card className="mt-[14px]">
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="이번 달 전체 내역 보기"
+                  onPress={() => navigation.navigate('Transactions', { month })}
+                  className="flex-row items-center justify-between active:opacity-70">
+                  <Text className={cx.sectionTitle}>이번 달 큰 지출</Text>
+                  <ChevronRight
+                    size={iconSize.inline}
+                    strokeWidth={iconStroke.default}
+                    color={tokens.ink3}
+                  />
+                </Pressable>
+                {bigExpenses.map((row, index) => (
+                  <View
+                    key={row.id}
+                    className="flex-row items-center"
+                    style={{ marginTop: index === 0 ? 14 : 12 }}>
+                    {/* 1위는 orange-600(흰 숫자 대비 4.57) — tokens.primary(=orange-500)를 쓰면 3.20 으로 떨어진다 */}
+                    <View
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 8,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        backgroundColor: index === 0 ? palette.orange600 : tokens.neutralTint,
+                      }}>
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontWeight: '700',
+                          color: index === 0 ? '#ffffff' : tokens.ink2,
+                        }}>
+                        {index + 1}
+                      </Text>
+                    </View>
+                    <View className="flex-1" style={{ marginLeft: 12 }}>
+                      <Text
+                        numberOfLines={1}
+                        style={{ fontSize: 14, fontWeight: '500', color: tokens.ink }}>
+                        {row.title}
+                      </Text>
+                      <Text style={{ marginTop: 2, fontSize: 11.5, color: tokens.ink3 }}>
+                        {`${getCategoryLabel(row.categoryId)} · ${new Date(
+                          row.occurredAt,
+                        ).getDate()}일`}
+                      </Text>
+                    </View>
+                    <Text
+                      style={{ marginLeft: 10, fontSize: 14, fontWeight: '700', color: tokens.ink }}>
+                      {formatAmountKo(row.amount)}
+                    </Text>
+                  </View>
+                ))}
               </Card>
             ) : null}
 
@@ -640,14 +736,21 @@ function HomeSkeleton() {
       {/* ① 메인 카드 — 채워진 면이라 내부 조각을 흉내내지 않고 단색 블록 하나로 */}
       <Skeleton height={200} radius={18} />
 
-      {/* ② 오늘 지출 행 */}
-      <View className="mt-[14px]">
-        <Skeleton height={66} radius={16} />
-      </View>
-
-      {/* ③ 수입 · 수지 두 칸 */}
+      {/* ② 오늘 지출 + 수입·수지 (한 장) */}
       <View className="mt-[14px]">
         <SkeletonCard>
+          <View className="flex-row items-center">
+            <Skeleton width={38} height={38} radius={12} />
+            <View className="ml-[12px] flex-1">
+              <Skeleton width={44} height={11} />
+              <View className="mt-[4px]">
+                <Skeleton width="55%" height={16} />
+              </View>
+            </View>
+          </View>
+          <View className="my-[12px]">
+            <Skeleton height={1} />
+          </View>
           <View className="flex-row">
             {[0, 1].map(index => (
               <View key={index} className="flex-1">
@@ -661,7 +764,7 @@ function HomeSkeleton() {
         </SkeletonCard>
       </View>
 
-      {/* ④ 카테고리 3줄 */}
+      {/* ③ 많이 쓴 카테고리 3줄 */}
       <View className="mt-[14px]">
         <SkeletonCard>
           <Skeleton width={96} height={13} />
@@ -670,6 +773,25 @@ function HomeSkeleton() {
               <SkeletonRow key={index} divider={false} />
             ))}
           </View>
+        </SkeletonCard>
+      </View>
+
+      {/* ④ 큰 지출 TOP 5 */}
+      <View className="mt-[14px]">
+        <SkeletonCard>
+          <Skeleton width={92} height={13} />
+          {[0, 1, 2].map(index => (
+            <View
+              key={index}
+              className="flex-row items-center"
+              style={{ marginTop: index === 0 ? 14 : 12 }}>
+              <Skeleton width={24} height={24} radius={8} />
+              <View className="ml-[12px] flex-1">
+                <Skeleton width="60%" height={14} />
+              </View>
+              <Skeleton width={56} height={14} />
+            </View>
+          ))}
         </SkeletonCard>
       </View>
 
@@ -705,6 +827,28 @@ function HomeSkeleton() {
       <View className="mt-[10px]">
         <Skeleton height={42} radius={12} />
       </View>
+    </View>
+  );
+}
+
+/**
+ * 메인 카드 배경 — 위(top)에서 아래(bottom)로 흐르는 세로 그라데이션.
+ * expo 를 안 쓰므로 이미 설치된 react-native-svg 로 그린다(추가 설치·pod 없음).
+ * id 는 hp-home-hero 고정 — Logo.tsx 가 uid 로 만드는 id 와 겹치면 안드로이드에서 채움이 섞인다.
+ * pointerEvents="none" 는 Svg 가 아니라 감싸는 View 에 준다.
+ */
+function HeroBackground({ top, bottom }: { top: string; bottom: string }) {
+  return (
+    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+      <Svg width="100%" height="100%">
+        <Defs>
+          <LinearGradient id="hp-home-hero" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0" stopColor={top} />
+            <Stop offset="1" stopColor={bottom} />
+          </LinearGradient>
+        </Defs>
+        <Rect x="0" y="0" width="100%" height="100%" fill="url(#hp-home-hero)" />
+      </Svg>
     </View>
   );
 }
