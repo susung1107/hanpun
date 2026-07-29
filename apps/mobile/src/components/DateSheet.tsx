@@ -35,7 +35,8 @@ export function DateSheet({ visible, value, onClose, onConfirm, blockFuture = tr
     }
   }, [visible, value]);
 
-  const cells = buildCalendarGrid(month);
+  // 시트는 6주 고정 — 달을 넘길 때마다 시트 높이가 튀면 버튼 위치가 흔들린다
+  const cells = buildCalendarGrid(month, 6);
   const [year, monthIndex] = month.split('-').map(Number);
   const todayKey = toDateKey(new Date());
   const selectedKey = toDateKey(selected);

@@ -1,5 +1,5 @@
 import type { Transaction, TransactionInput } from '@hanpun/shared';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { queryKeys } from '../api/queryKeys';
 import {
@@ -17,6 +17,25 @@ export function useMonthTransactions(month: string) {
   return useQuery({
     queryKey: queryKeys.transactions.byMonth(month),
     queryFn: ({ signal }) => fetchTransactionsByMonth(month, signal),
+  });
+}
+
+/**
+ * 옆 달을 미리 받아 둔다 (캘린더의 ‹ › 버튼·스와이프).
+ *
+ * 캐시에 없으면 버튼을 누른 순간 그 달이 통째로 빈 채로 그려졌다가 뒤늦게 채워진다.
+ * 미리 받아 두면 월 이동이 즉시 끝난다. staleTime 1분·gcTime 7일이라 낭비도 아니다.
+ *
+ * `keepPreviousData` 를 쓰지 않는 이유: 캘린더는 날짜 칸에 금액을 얹으므로
+ * 이전 달 데이터가 남아 있으면 **다른 달 금액이 엉뚱한 날짜에 붙어 보인다.**
+ * 비어 있는 편이 틀린 것보다 낫고, 그 사이는 스켈레톤이 메운다.
+ */
+export function usePrefetchMonths(months: string[]) {
+  useQueries({
+    queries: months.map(month => ({
+      queryKey: queryKeys.transactions.byMonth(month),
+      queryFn: ({ signal }: { signal: AbortSignal }) => fetchTransactionsByMonth(month, signal),
+    })),
   });
 }
 

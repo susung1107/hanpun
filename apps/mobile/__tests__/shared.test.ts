@@ -1,5 +1,6 @@
 import {
   buildCalendarGrid,
+  calendarWeeks,
   formatDateShort,
   formatMonthLong,
   formatWon,
@@ -26,10 +27,23 @@ describe('날짜 유틸', () => {
     expect(formatDateShort('2026-07-22')).toContain('7월 22일');
   });
 
-  it('캘린더 그리드는 항상 6주 42칸이다', () => {
+  it('캘린더 그리드는 그 달에 필요한 주 수만 만든다', () => {
+    // 2026-07-01 은 수요일 → 3 + 31 = 34칸 → 5주
+    expect(calendarWeeks('2026-07')).toBe(5);
     const grid = buildCalendarGrid('2026-07');
-    expect(grid).toHaveLength(42);
+    expect(grid).toHaveLength(35);
     expect(grid.filter(cell => cell.inCurrentMonth)).toHaveLength(31);
+
+    // 2026-08-01 은 토요일 → 6 + 31 = 37칸 → 6주
+    expect(calendarWeeks('2026-08')).toBe(6);
+    expect(buildCalendarGrid('2026-08')).toHaveLength(42);
+
+    // 2026-02-01 은 일요일이고 28일 → 정확히 4주
+    expect(calendarWeeks('2026-02')).toBe(4);
+  });
+
+  it('주 수를 고정하면 그만큼 만든다 (날짜 선택 시트)', () => {
+    expect(buildCalendarGrid('2026-07', 6)).toHaveLength(42);
   });
 });
 

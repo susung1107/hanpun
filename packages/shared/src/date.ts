@@ -91,7 +91,7 @@ export function shiftMonth(monthKey: string, offset: number): string {
 }
 
 /**
- * 캘린더 그리드용 6주(42칸) 날짜 배열. 일요일 시작.
+ * 캘린더 그리드용 날짜 배열. 일요일 시작.
  * 이번 달이 아닌 앞뒤 날짜도 포함하며 inCurrentMonth 로 구분한다.
  */
 export interface CalendarCell {
@@ -103,12 +103,27 @@ export interface CalendarCell {
   inCurrentMonth: boolean;
 }
 
-export function buildCalendarGrid(monthKey: string): CalendarCell[] {
+/**
+ * 그 달을 다 담는 데 실제로 필요한 주 수 (4~6).
+ * 늘 6주로 그리면 5주짜리 달 아래에 빈 줄이 하나 남는다 — 줄 높이를 화면에 맞춰
+ * 늘리는 캘린더에서는 그 빈 줄이 그대로 죽은 공간이 된다.
+ */
+export function calendarWeeks(monthKey: string): number {
+  const first = fromMonthKey(monthKey);
+  const total = first.getDay() + daysInMonth(first.getFullYear(), first.getMonth() + 1);
+  return Math.ceil(total / 7);
+}
+
+/**
+ * @param weeks 주 수를 고정하고 싶을 때 (날짜 선택 시트처럼 높이가 흔들리면 안 되는 곳은 `6`).
+ *              생략하면 그 달에 필요한 만큼만 만든다.
+ */
+export function buildCalendarGrid(monthKey: string, weeks?: number): CalendarCell[] {
   const first = fromMonthKey(monthKey);
   const start = new Date(first);
   start.setDate(1 - first.getDay());
 
-  return Array.from({ length: 42 }, (_, index) => {
+  return Array.from({ length: (weeks ?? calendarWeeks(monthKey)) * 7 }, (_, index) => {
     const date = new Date(start);
     date.setDate(start.getDate() + index);
     return {
