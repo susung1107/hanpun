@@ -5,7 +5,6 @@ import { useRoute } from '@react-navigation/native';
 import { SearchX, Trash2 } from 'lucide-react-native';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -25,6 +24,7 @@ import {
   Screen,
   ScreenHeader,
   SelectRow,
+  Skeleton,
 } from '../components';
 import { usePersonalRules, useRememberCategory } from '../hooks/useClassification';
 import { useDeleteTransaction, useTransaction, useUpdateTransaction } from '../hooks/useTransactions';
@@ -89,9 +89,7 @@ export function TransactionEditScreen() {
     return (
       <Screen>
         <ScreenHeader title="거래 수정" onBack={navigation.goBack} />
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color={tokens.ink3} />
-        </View>
+        <EditSkeleton />
       </Screen>
     );
   }
@@ -260,5 +258,51 @@ export function TransactionEditScreen() {
         loading={remove.isPending}
       />
     </Screen>
+  );
+}
+
+/** 로딩 중 수정 폼 골격 — 금액 · 입력 행 · 카테고리 그리드 · 버튼 */
+function EditSkeleton() {
+  return (
+    <View
+      accessibilityRole="progressbar"
+      accessibilityLabel="불러오는 중"
+      style={{ paddingHorizontal: 20 }}>
+      {/* 금액 입력 자리 */}
+      <Skeleton height={56} radius={14} />
+
+      {/* 내역 · 날짜 입력 행 */}
+      <View className="mt-[10px] gap-[10px]">
+        <Skeleton height={48} radius={12} />
+        <Skeleton height={48} radius={12} />
+      </View>
+
+      {/* 카테고리 라벨 + 그리드 (5열 × 2행) */}
+      <Skeleton width={44} height={12} style={{ marginTop: 16, marginBottom: 8 }} />
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        {Array.from({ length: 10 }, (_, index) => (
+          <View key={index} style={{ width: '20%' }}>
+            <View style={{ paddingRight: 8 }}>
+              <Skeleton height={64} radius={14} />
+            </View>
+          </View>
+        ))}
+      </View>
+
+      {/* 메모 입력 행 */}
+      <View className="mt-[12px]">
+        <Skeleton height={48} radius={12} />
+      </View>
+
+      {/* 하단 버튼 (취소 · 수정 완료) */}
+      <View className="mb-[28px] mt-[20px] flex-row gap-[10px]">
+        <View className="flex-1">
+          <Skeleton height={50} radius={14} />
+        </View>
+        <View style={{ flex: 2 }}>
+          <Skeleton height={50} radius={14} />
+        </View>
+      </View>
+    </View>
   );
 }

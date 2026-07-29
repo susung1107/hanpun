@@ -19,6 +19,8 @@ import {
   Screen,
   ScreenHeader,
   SectionLabel,
+  Skeleton,
+  SkeletonCard,
 } from '../components';
 import { useBudgetProgress, useBudgets, useDeleteBudget, useUpsertBudget } from '../hooks/useBudgets';
 import { useMonthNavigation } from '../hooks/useMonthNavigation';
@@ -31,7 +33,7 @@ export function BudgetScreen() {
   const { tokens } = useTheme();
   const { month } = useMonthNavigation();
 
-  const { data: budgets } = useBudgets(month);
+  const { data: budgets, isLoading: budgetsLoading } = useBudgets(month);
   const { data: progress } = useBudgetProgress(month);
   const upsert = useUpsertBudget();
   const remove = useDeleteBudget();
@@ -110,6 +112,16 @@ export function BudgetScreen() {
       setSaving(false);
     }
   };
+
+  // 서버 예산이 도착하기 전에는 총예산·카테고리 골격을 그린다
+  if (budgetsLoading) {
+    return (
+      <Screen>
+        <ScreenHeader title="예산 설정" onBack={navigation.goBack} />
+        <BudgetSkeleton />
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
@@ -224,6 +236,37 @@ export function BudgetScreen() {
         }}
       />
     </Screen>
+  );
+}
+
+/** 예산 화면 로딩 골격 — 총예산 카드 + 카테고리별 예산 6줄 */
+function BudgetSkeleton() {
+  return (
+    <View
+      accessibilityRole="progressbar"
+      accessibilityLabel="불러오는 중"
+      style={{ paddingHorizontal: 18, paddingTop: 8 }}>
+      <SkeletonCard>
+        <Skeleton width="40%" height={12} />
+        <Skeleton width="55%" height={26} style={{ marginTop: 12 }} />
+        <Skeleton height={6} style={{ marginTop: 14 }} />
+      </SkeletonCard>
+
+      <Skeleton width="35%" height={13} style={{ marginTop: 22, marginBottom: 12 }} />
+
+      <SkeletonCard>
+        {Array.from({ length: 6 }, (_, index) => (
+          <View key={index} className="flex-row items-center gap-[12px] py-[13px]">
+            <Skeleton width={34} height={34} radius={10} />
+            <View className="flex-1 gap-[7px]">
+              <Skeleton width="45%" height={13} />
+              <Skeleton height={6} />
+            </View>
+            <Skeleton width={64} height={12} />
+          </View>
+        ))}
+      </SkeletonCard>
+    </View>
   );
 }
 

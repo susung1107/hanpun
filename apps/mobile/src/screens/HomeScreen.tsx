@@ -13,7 +13,18 @@ import { Bell, Receipt } from 'lucide-react-native';
 import React, { useEffect, useMemo } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 
-import { Card, EmptyState, Fab, ListCard, ProgressBar, Screen, TransactionRow } from '../components';
+import {
+  Card,
+  EmptyState,
+  Fab,
+  ListCard,
+  ProgressBar,
+  Screen,
+  Skeleton,
+  SkeletonCard,
+  SkeletonRow,
+  TransactionRow,
+} from '../components';
 import { useBudgetProgress } from '../hooks/useBudgets';
 import { useUnreadNotificationCount } from '../hooks/useNotifications';
 import { useMonthlyStats } from '../hooks/useStats';
@@ -75,6 +86,31 @@ export function HomeScreen() {
   const isEmpty = !transactions.isLoading && rows.length === 0;
 
   const refreshing = transactions.isFetching && !transactions.isLoading;
+
+  // 헤더는 확정된 정보라 그대로 두고, 요약·목록 자리만 스켈레톤으로 채운다
+  if (transactions.isLoading || stats.isLoading) {
+    return (
+      <Screen>
+        <View className="flex-row items-center justify-between px-[22px] pb-[10px] pt-[6px]">
+          <View className="flex-row items-baseline gap-[6px]">
+            <Text className={cx.title1}>{`${Number(monthNumber)}월`}</Text>
+            <Text className={cx.caption}>{year}</Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="알림"
+            onPress={() => navigation.navigate('Notifications')}
+            className="h-[36px] w-[36px] items-center justify-center rounded-[18px] border border-line bg-surface active:opacity-70 dark:border-line-dark dark:bg-surface-dark">
+            <Bell size={17} strokeWidth={iconStroke.default} color={tokens.ink} />
+          </Pressable>
+        </View>
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 110 }}>
+          <HomeSkeleton />
+        </ScrollView>
+        <Fab onPress={() => navigation.navigate('AddTransaction')} />
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
@@ -241,5 +277,57 @@ export function HomeScreen() {
 
       <Fab onPress={() => navigation.navigate('AddTransaction')} />
     </Screen>
+  );
+}
+
+function HomeSkeleton() {
+  return (
+    // 스크린리더에는 이 컨테이너 하나만 "불러오는 중"으로 읽힌다 (조각은 Skeleton 내부에서 접근성 숨김 처리)
+    <View accessibilityRole="progressbar" accessibilityLabel="불러오는 중">
+      {/* 요약 카드 — Card large 와 같은 radius 18 */}
+      <SkeletonCard>
+        {/* '이번 달 총 지출' 라벨 → 32px 대형 금액 → 전월 대비 한 줄 */}
+        <Skeleton width={84} height={11} />
+        <View className="mt-[8px]">
+          <Skeleton width="62%" height={30} radius={8} />
+        </View>
+        <View className="mt-[10px]">
+          <Skeleton width="46%" height={12} />
+        </View>
+
+        {/* 수입 · 수지 두 칸 */}
+        <View className="mt-[14px] flex-row gap-[18px]">
+          <Skeleton width={92} height={12} />
+          <Skeleton width={92} height={12} />
+        </View>
+
+        {/* 예산 진행바 — ProgressBar 기본 height 8 / radius 4 와 같은 크기 */}
+        <View className="mt-[14px]">
+          <Skeleton height={8} radius={4} />
+        </View>
+        <View className="mt-[8px] flex-row justify-between">
+          <Skeleton width={116} height={11} />
+          <Skeleton width={78} height={11} />
+        </View>
+      </SkeletonCard>
+
+      {/* '오늘 지출' 배너 — 라벨 + 금액 2줄이라 실제 높이가 약 62 */}
+      <View className="mt-[14px]">
+        <Skeleton height={62} radius={14} />
+      </View>
+
+      {/* '최근 내역' 제목 + '전체보기 ›' */}
+      <View className="mb-[8px] mt-[18px] flex-row items-center justify-between">
+        <Skeleton width={64} height={14} />
+        <Skeleton width={52} height={11} />
+      </View>
+
+      {/* 홈은 최근 3건만 보여주므로 스켈레톤도 정확히 3줄 (구분선은 ListCard 가 넣는다) */}
+      <ListCard className="px-[14px]">
+        {[0, 1, 2].map(index => (
+          <SkeletonRow key={index} divider={false} />
+        ))}
+      </ListCard>
+    </View>
   );
 }

@@ -5,7 +5,15 @@ import { Bell, BellOff, CircleAlert, Repeat } from 'lucide-react-native';
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import { EmptyState, ListCard, Screen, ScreenHeader, SectionLabel } from '../components';
+import {
+  EmptyState,
+  ListCard,
+  Screen,
+  ScreenHeader,
+  SectionLabel,
+  Skeleton,
+  SkeletonCard,
+} from '../components';
 import { useMarkNotificationsRead, useNotifications } from '../hooks/useNotifications';
 import { useAppNavigation } from '../navigation/hooks';
 import { useTheme } from '../theme/ThemeProvider';
@@ -62,7 +70,7 @@ const KIND_STYLE: Record<AppNotification['kind'], KindStyle> = {
 export function NotificationsScreen() {
   const navigation = useAppNavigation();
   const { tokens } = useTheme();
-  const { data } = useNotifications();
+  const { data, isLoading } = useNotifications();
   const markRead = useMarkNotificationsRead();
 
   const rows = useMemo(() => data ?? [], [data]);
@@ -84,6 +92,18 @@ export function NotificationsScreen() {
   );
 
   const sections = useMemo(() => groupByRecency(rows), [rows]);
+
+  // 로딩 중(data === undefined)에는 골격을 그린다. 데이터가 도착한 뒤의 빈 배열만
+  // "아직 받은 알림이 없어요" 빈 상태로 취급한다 — 구분하지 않으면 첫 진입에서
+  // 항상 빈 상태가 잠깐 깜빡인다.
+  if (isLoading) {
+    return (
+      <Screen>
+        <ScreenHeader title="알림" onBack={navigation.goBack} />
+        <NotificationsSkeleton />
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
@@ -132,6 +152,30 @@ export function NotificationsScreen() {
         )}
       </ScrollView>
     </Screen>
+  );
+}
+
+/** 알림 화면 로딩 골격 — 알림 행 6줄 (아이콘 배지 + 제목/본문 + 시간) */
+function NotificationsSkeleton() {
+  return (
+    <View
+      accessibilityRole="progressbar"
+      accessibilityLabel="불러오는 중"
+      style={{ paddingHorizontal: 18, paddingTop: 8 }}>
+      <Skeleton width="25%" height={13} style={{ marginTop: 8, marginBottom: 10 }} />
+      <SkeletonCard>
+        {Array.from({ length: 6 }, (_, index) => (
+          <View key={index} className="flex-row items-start gap-[10px] py-[14px]">
+            <Skeleton width={34} height={34} radius={11} />
+            <View className="flex-1 gap-[7px]">
+              <Skeleton width="55%" height={13} />
+              <Skeleton width="80%" height={11} />
+              <Skeleton width={40} height={10} />
+            </View>
+          </View>
+        ))}
+      </SkeletonCard>
+    </View>
   );
 }
 

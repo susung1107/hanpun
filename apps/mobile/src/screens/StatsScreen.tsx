@@ -6,7 +6,7 @@ import {
   getCategoryLabel,
 } from '@hanpun/shared';
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 
 import { ChartPie } from 'lucide-react-native';
 
@@ -17,6 +17,8 @@ import {
   MonthNav,
   Screen,
   SegmentedControl,
+  Skeleton,
+  SkeletonCard,
   TabHeader,
   type SegmentOption,
 } from '../components';
@@ -33,6 +35,15 @@ const RANGE_OPTIONS: SegmentOption<Range>[] = [
   { value: 'month', label: '월간' },
   { value: 'year', label: '연간' },
 ];
+
+/**
+ * 스켈레톤 막대 높이 비율 (12개월 = 12칸).
+ * Math.random() 을 쓰면 렌더마다 막대가 들썩여 로딩이 시끄러워지므로, 자연스럽게
+ * 들쭉날쭉한 값을 상수로 고정한다. 월별 차트(12칸)에 1:1, 일별 추이 막대에는 순환해 쓴다.
+ */
+const MONTH_BAR_RATIOS = [
+  0.45, 0.62, 0.38, 0.7, 0.55, 0.85, 0.5, 0.68, 0.42, 0.9, 0.58, 0.75,
+] as const;
 
 /** 통계 (디자인 stats / stats-year) */
 export function StatsScreen() {
@@ -101,11 +112,7 @@ function MonthlyStatsView({ month }: { month: string }) {
   }, [progress]);
 
   if (isLoading || !stats) {
-    return (
-      <View className="items-center pt-[70px]">
-        <ActivityIndicator color={tokens.ink3} />
-      </View>
-    );
+    return <MonthlyStatsSkeleton />;
   }
 
   if (stats.totalExpense === 0 && stats.totalIncome === 0) {
@@ -258,11 +265,7 @@ function YearlyStatsView({ year }: { year: number }) {
   const { data: stats, isLoading } = useYearlyStats(year);
 
   if (isLoading || !stats) {
-    return (
-      <View className="items-center pt-[70px]">
-        <ActivityIndicator color={tokens.ink3} />
-      </View>
-    );
+    return <YearlyStatsSkeleton />;
   }
 
   const months = stats.byMonth;
@@ -346,6 +349,121 @@ function YearlyStatsView({ year }: { year: number }) {
         </Card>
       ) : null}
     </>
+  );
+}
+
+/* -------------------------------- 스켈레톤 -------------------------------- */
+
+/** 3칸 요약 카드(지출·수입·수지 / 연지출·연수입·월평균)의 골격 */
+function SummarySkeleton({ labelWidth, valueWidth }: { labelWidth: number; valueWidth: number }) {
+  return (
+    <SkeletonCard>
+      <View className="flex-row">
+        {[0, 1, 2].map(index => (
+          <View key={index} className="flex-1">
+            <Skeleton width={labelWidth} height={11} />
+            <Skeleton width={valueWidth} height={17} radius={5} style={{ marginTop: 5 }} />
+          </View>
+        ))}
+      </View>
+    </SkeletonCard>
+  );
+}
+
+/**
+ * 월간 뷰 로딩 골격 — 실제 MonthlyStatsView 의 4카드 구조를 그대로 재현한다.
+ * 요약 카드 → 카테고리별 지출(6줄) → 일별 지출 추이(막대) → 전월 대비.
+ * (실제 화면에 도넛이 없으므로 "도넛 자리"는 실제 막대 차트 자리로 맞췄다)
+ */
+function MonthlyStatsSkeleton() {
+  return (
+    <View accessibilityRole="progressbar" accessibilityLabel="불러오는 중">
+      <SummarySkeleton labelWidth={34} valueWidth={58} />
+
+      {/* 카테고리별 지출 — 아이콘 + 라벨 + 진행바 + 금액 6줄 */}
+      <SkeletonCard style={{ marginTop: 14 }}>
+        <Skeleton width={110} height={14} style={{ marginBottom: 14 }} />
+        {Array.from({ length: 6 }, (_, index) => (
+          <View key={index} className="mb-[10px] flex-row items-center gap-[8px]">
+            <Skeleton width={28} height={28} radius={8} />
+            <Skeleton width={46} height={12} />
+            <View style={{ flex: 1 }}>
+              <Skeleton width="100%" height={14} radius={4} />
+            </View>
+            <Skeleton width={56} height={12} />
+          </View>
+        ))}
+      </SkeletonCard>
+
+      {/* 일별 지출 추이 — 실제 막대 차트(height 64, 하단 정렬)의 자리 */}
+      <SkeletonCard style={{ marginTop: 14 }}>
+        <Skeleton width={96} height={14} style={{ marginBottom: 14 }} />
+        <View style={{ height: 64, flexDirection: 'row', alignItems: 'flex-end', gap: 3 }}>
+          {Array.from({ length: 30 }, (_, index) => (
+            <View key={index} style={{ flex: 1 }}>
+              <Skeleton
+                width="100%"
+                height={Math.max(MONTH_BAR_RATIOS[index % MONTH_BAR_RATIOS.length]! * 64, 3)}
+                radius={3}
+              />
+            </View>
+          ))}
+        </View>
+      </SkeletonCard>
+
+      {/* 전월 대비 카드 */}
+      <SkeletonCard style={{ marginTop: 14 }}>
+        <View className="flex-row items-center justify-between">
+          <Skeleton width={120} height={12} />
+          <Skeleton width={92} height={12} />
+        </View>
+      </SkeletonCard>
+    </View>
+  );
+}
+
+/**
+ * 연간 뷰 로딩 골격 — 실제 YearlyStatsView 의 3카드 구조를 그대로 재현한다.
+ * 요약 카드 → 월별 지출(막대 12개, 하단 정렬) → 연간 최다 카테고리.
+ * 막대 높이는 MONTH_BAR_RATIOS 로 고정한다.
+ */
+function YearlyStatsSkeleton() {
+  return (
+    <View accessibilityRole="progressbar" accessibilityLabel="불러오는 중">
+      <SummarySkeleton labelWidth={48} valueWidth={62} />
+
+      {/* 월별 지출 — 막대 12개(height 150, 하단 정렬) + 월 라벨 */}
+      <SkeletonCard style={{ marginTop: 14 }}>
+        <Skeleton width={72} height={14} style={{ marginBottom: 14 }} />
+        <View style={{ height: 150, flexDirection: 'row', alignItems: 'flex-end', gap: 6 }}>
+          {MONTH_BAR_RATIOS.map((ratio, index) => (
+            <View key={index} style={{ flex: 1, alignItems: 'center' }}>
+              <Skeleton
+                width="100%"
+                height={Math.max(ratio * 150, 4)}
+                radius={4}
+                style={{ maxWidth: 18 }}
+              />
+            </View>
+          ))}
+        </View>
+        <View className="mt-[6px] flex-row">
+          {MONTH_BAR_RATIOS.map((_, index) => (
+            <View key={index} style={{ flex: 1, alignItems: 'center' }}>
+              <Skeleton width={12} height={9} />
+            </View>
+          ))}
+        </View>
+      </SkeletonCard>
+
+      {/* 연간 최다 지출 카테고리 카드 */}
+      <SkeletonCard style={{ marginTop: 14 }}>
+        <View className="flex-row items-center justify-between">
+          <Skeleton width={140} height={12} />
+          <Skeleton width={90} height={12} />
+        </View>
+      </SkeletonCard>
+    </View>
   );
 }
 

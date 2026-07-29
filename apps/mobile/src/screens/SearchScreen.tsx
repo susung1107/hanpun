@@ -9,7 +9,7 @@ import {
 } from '@hanpun/shared';
 import { Search, SearchX, X } from 'lucide-react-native';
 import React, { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
 import {
   BottomSheet,
@@ -18,6 +18,8 @@ import {
   ListCard,
   Pill,
   Screen,
+  Skeleton,
+  SkeletonList,
   TransactionRow,
 } from '../components';
 import { useTransactionSearch } from '../hooks/useTransactions';
@@ -179,9 +181,7 @@ export function SearchScreen() {
             paddingTop={90}
           />
         ) : (isFetching || !settled) && results.length === 0 ? (
-          <View className="pt-[90px] items-center">
-            <ActivityIndicator color={tokens.ink3} />
-          </View>
+          <SearchSkeleton />
         ) : results.length === 0 ? (
           <EmptyState
             icon={SearchX}
@@ -301,6 +301,18 @@ export function SearchScreen() {
         </View>
       </BottomSheet>
     </Screen>
+  );
+}
+
+/** 로딩 중 — 검색 결과(건수 한 줄 → 거래 목록)의 골격을 회색으로 */
+function SearchSkeleton() {
+  return (
+    <View accessibilityRole="progressbar" accessibilityLabel="불러오는 중" className="pt-[4px]">
+      <Skeleton width={96} height={12} />
+      <View className="mt-[12px]">
+        <SkeletonList rows={7} />
+      </View>
+    </View>
   );
 }
 
