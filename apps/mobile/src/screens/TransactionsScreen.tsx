@@ -5,7 +5,18 @@ import { Receipt, Search } from 'lucide-react-native';
 import React, { useMemo, useState } from 'react';
 import { FlatList, Pressable, Text, View } from 'react-native';
 
-import { Card, EmptyState, ListCard, Pill, Screen, ScreenHeader, TransactionRow } from '../components';
+import {
+  Card,
+  EmptyState,
+  ListCard,
+  Pill,
+  Screen,
+  ScreenHeader,
+  Skeleton,
+  SkeletonCard,
+  SkeletonRow,
+  TransactionRow,
+} from '../components';
 import { groupTransactionsByDate, useMonthTransactions } from '../hooks/useTransactions';
 import { useAppNavigation } from '../navigation/hooks';
 import type { RootStackParamList } from '../navigation/types';
@@ -18,6 +29,11 @@ const FILTERS: { value: Filter; label: string }[] = [
   { value: 'expense', label: '지출만' },
   { value: 'income', label: '수입만' },
 ];
+
+/** 스켈레톤 필터 칩 너비 — 실제 라벨(전체·지출만·수입만) 길이에 맞춘 고정값 */
+const SKELETON_FILTER_WIDTHS = [48, 66, 66];
+/** 스켈레톤 날짜 섹션 당 행 수 (섹션 2개) */
+const SKELETON_SECTION_ROWS = 4;
 
 /** 월 전체 내역 (디자인 transactions) */
 export function TransactionsScreen() {
@@ -41,21 +57,34 @@ export function TransactionsScreen() {
     return groupTransactionsByDate(filtered);
   }, [rows, filter]);
 
+  const header = (
+    <ScreenHeader
+      title={`${formatMonthShort(month)} 내역`}
+      onBack={navigation.goBack}
+      right={
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="검색"
+          onPress={() => navigation.navigate('Search')}
+          hitSlop={8}>
+          <Search size={19} strokeWidth={1.9} color={tokens.ink3} />
+        </Pressable>
+      }
+    />
+  );
+
+  if (isLoading) {
+    return (
+      <Screen>
+        {header}
+        <TransactionsSkeleton />
+      </Screen>
+    );
+  }
+
   return (
     <Screen>
-      <ScreenHeader
-        title={`${formatMonthShort(month)} 내역`}
-        onBack={navigation.goBack}
-        right={
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="검색"
-            onPress={() => navigation.navigate('Search')}
-            hitSlop={8}>
-            <Search size={19} strokeWidth={1.9} color={tokens.ink3} />
-          </Pressable>
-        }
-      />
+      {header}
 
       <FlatList
         data={sections}
@@ -89,15 +118,13 @@ export function TransactionsScreen() {
           </View>
         }
         ListEmptyComponent={
-          isLoading ? null : (
-            <EmptyState
-              icon={Receipt}
-              title="이 달에는 기록이 없어요"
-              description={'다른 달을 확인하거나\n지금 바로 기록해보세요'}
-              tone="neutral"
-              paddingTop={50}
-            />
-          )
+          <EmptyState
+            icon={Receipt}
+            title="이 달에는 기록이 없어요"
+            description={'다른 달을 확인하거나\n지금 바로 기록해보세요'}
+            tone="neutral"
+            paddingTop={50}
+          />
         }
         renderItem={({ item }) => {
           const date = new Date(`${item.dateKey}T00:00:00`);
@@ -130,6 +157,47 @@ export function TransactionsScreen() {
         }}
       />
     </Screen>
+  );
+}
+
+/** 로딩 중 — 실제 내역 화면(필터 칩 → 월 요약 카드 → 날짜 섹션)의 골격을 회색으로 */
+function TransactionsSkeleton() {
+  return (
+    <View
+      accessibilityRole="progressbar"
+      accessibilityLabel="불러오는 중"
+      className="px-[18px] pt-[2px]">
+      <View className="mb-[12px] flex-row gap-[8px]">
+        {SKELETON_FILTER_WIDTHS.map((width, index) => (
+          <Skeleton key={index} width={width} height={30} radius={15} />
+        ))}
+      </View>
+
+      <SkeletonCard>
+        <View className="flex-row">
+          {[0, 1, 2].map(index => (
+            <View key={index} className="flex-1 gap-[6px]">
+              <Skeleton width={28} height={11} />
+              <Skeleton width="70%" height={16} radius={5} />
+            </View>
+          ))}
+        </View>
+      </SkeletonCard>
+
+      {[0, 1].map(section => (
+        <View key={section} className="mt-[10px]">
+          <View className="mb-[6px] mt-[4px] flex-row items-center justify-between px-[4px]">
+            <Skeleton width={78} height={12} />
+            <Skeleton width={62} height={12} />
+          </View>
+          <ListCard className="px-[16px]">
+            {Array.from({ length: SKELETON_SECTION_ROWS }, (_, index) => (
+              <SkeletonRow key={index} divider={false} />
+            ))}
+          </ListCard>
+        </View>
+      ))}
+    </View>
   );
 }
 

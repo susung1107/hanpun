@@ -1,6 +1,7 @@
-import type { RecurringRule, Transaction } from '@hanpun/shared';
+import type { CalendarCell, RecurringRule, Transaction } from '@hanpun/shared';
 import {
   buildCalendarGrid,
+  formatAmountKo,
   formatCompactWon,
   formatDateShort,
   formatMonthLong,
@@ -8,270 +9,403 @@ import {
   getCategoryLabel,
   shiftMonth,
   toDateKey,
-  toMonthKey,
   WEEKDAY_KO,
 } from '@hanpun/shared';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { FlatList, Pressable, ScrollView, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler';
 
-import { BottomSheet, CategoryIcon, Fab, Pill, Screen, TabHeader } from '../components';
+import {
+  BottomSheet,
+  CategoryIcon,
+  Fab,
+  MonthNav,
+  Pill,
+  Screen,
+  Skeleton,
+  TabHeader,
+} from '../components';
+import { useMonthNavigation } from '../hooks/useMonthNavigation';
 import { useRecurringRules } from '../hooks/useRecurring';
-import { useMonthTransactions } from '../hooks/useTransactions';
+import { useMonthTransactions, usePrefetchMonths } from '../hooks/useTransactions';
 import { useAppNavigation } from '../navigation/hooks';
 import { cx } from '../theme/classes';
 import { useTheme } from '../theme/ThemeProvider';
 import { palette } from '../theme/tokens';
 
-/** 셀·월 블록 높이 — getItemLayout 으로 초기 스크롤 위치를 잡기 위해 고정한다 */
-const CELL_HEIGHT = 48;
-const CELL_GAP = 2;
-const LABEL_HEIGHT = 26;
-const MONTH_HEIGHT = LABEL_HEIGHT + 6 * (CELL_HEIGHT + CELL_GAP);
+/**
+ * 캘린더는 **한 달만 그린다.**
+ *
+ * 예전에는 61개월을 세로 무한 스크롤로 깔고 `initialScrollIndex` 로 이번 달에
+ * 점프했다. 그 구조는 두 가지가 나빴다:
+ *   1) 가상 목록이 첫 프레임에 이번 달을 그리지 못해 **화면에 들어온 순간 빈 화면**이
+ *      뜨고, 스크롤을 한 번 건드려야 달력이 나타났다.
+ *   2) 한 화면에 여러 달의 끄트머리가 걸쳐 보여 "이번 달" 이라는 덩어리가 없었다.
+ *
+ * 지금은 그 달의 격자를 곧바로 렌더한다. 격자 계산(`buildCalendarGrid`)은 순수 함수라
+ * 네트워크를 기다리지 않는다 — **날짜는 항상 즉시** 보이고, 금액만 나중에 채워진다.
+ * 달 이동은 헤더의 ‹ › 버튼과 좌우 스와이프 두 가지로 한다.
+ */
 
-/** 과거 48개월 ~ 미래 12개월을 미리 깔고, 아래로 더 내리면 미래를 연장한다 */
-const PAST_MONTHS = 48;
-const FUTURE_MONTHS = 12;
+/** 격자 좌우 여백 — 다른 화면(18)보다 좁게 잡아 한 달이 화면을 거의 채우게 한다 */
+const GRID_PAD = 8;
 
 /**
- * 날짜 칸 금액 표기 — 폭이 40px 남짓이라 '원' 을 빼고, 100만 이상만 만·억으로 줄인다.
+ * 주 한 줄의 높이 범위.
+ *
+ * `flex: 1` 로 남는 세로를 나눠 가지되, 위아래로 한계를 둔다.
+ * 최소값이 없으면 작은 기기에서 금액 두 줄이 잘리고, 최대값이 없으면
+ * 큰 화면·4주짜리 달에서 칸이 우스꽝스럽게 늘어난다.
+ */
+const ROW_MIN_HEIGHT = 56;
+const ROW_MAX_HEIGHT = 108;
+
+/** 하단 요약 띠 높이 — FAB(58) 이 앉을 자리이기도 하다. 격자와 FAB 이 겹치지 않는다 */
+const FOOTER_HEIGHT = 74;
+
+/**
+ * 날짜 칸 금액 표기 — 폭이 45px 남짓이라 '원' 을 빼고, 100만 이상만 만·억으로 줄인다.
  * (10만원대까지는 정확한 숫자가 더 유용하다)
  */
 const CELL_MONEY = { unit: false, exactBelow: 1_000_000 } as const;
+
+/** 요일 헤더 색 — 한국 달력 관례대로 일요일만 빨강, 나머지는 같은 회색 */
+const SUNDAY = 0;
+
+/** 반복거래로 예정된 고정지출을 미리 보여주므로 앞 달로도 갈 수 있어야 한다 */
+const MAX_FUTURE_MONTHS = 12;
 
 interface DaySelection {
   dateKey: string;
   items: Transaction[];
 }
 
-/** 캘린더 (디자인 calendar) — 아이폰 캘린더처럼 세로 무한 스크롤 */
+interface DayEntry {
+  expense: number;
+  income: number;
+  items: Transaction[];
+}
+
+/** 캘린더 (디자인 calendar) — 한 달을 한 화면에 */
 export function CalendarScreen() {
   const navigation = useAppNavigation();
-  const { tokens, isDark } = useTheme();
-  const listRef = useRef<FlatList<string>>(null);
+  const { tokens } = useTheme();
 
-  const currentMonth = toMonthKey(new Date());
-  const [future, setFuture] = useState(FUTURE_MONTHS);
+  const { month, goPrev, goNext, goToday, canGoNext, isCurrentMonth } = useMonthNavigation({
+    maxFutureMonths: MAX_FUTURE_MONTHS,
+  });
   const [selected, setSelected] = useState<DaySelection | null>(null);
-  const [hintVisible, setHintVisible] = useState(true);
 
-  const months = useMemo(
-    () =>
-      Array.from({ length: PAST_MONTHS + future + 1 }, (_, index) =>
-        shiftMonth(currentMonth, index - PAST_MONTHS),
-      ),
-    [currentMonth, future],
-  );
-
+  const { data, isLoading } = useMonthTransactions(month);
   const { data: rules } = useRecurringRules();
+
+  // 옆 달을 미리 받아 둔다 — ‹ › 를 누른 순간 금액이 이미 캐시에 있다
+  const neighbours = useMemo(() => [shiftMonth(month, -1), shiftMonth(month, 1)], [month]);
+  usePrefetchMonths(neighbours);
+
   const plannedFor = useMemo(() => buildPlanner(rules ?? []), [rules]);
 
-  const getItemLayout = useCallback(
-    (_: unknown, index: number) => ({
-      length: MONTH_HEIGHT,
-      offset: MONTH_HEIGHT * index,
-      index,
-    }),
-    [],
+  const { byDay, total } = useMemo(() => aggregateByDay(data ?? []), [data]);
+
+  /** 그 달에 필요한 주 수만 만든다 — 늘 6주로 그리면 5주짜리 달에 빈 줄이 남는다 */
+  const weeks = useMemo(() => {
+    const cells = buildCalendarGrid(month);
+    const rows: CalendarCell[][] = [];
+    for (let index = 0; index < cells.length; index += 7) {
+      rows.push(cells.slice(index, index + 7));
+    }
+    return rows;
+  }, [month]);
+
+  const todayKey = toDateKey(new Date());
+
+  // 달이 바뀌면 열려 있던 날짜 선택을 버린다 (다른 달의 날짜가 남으면 안 된다)
+  const handlePrev = useCallback(() => {
+    setSelected(null);
+    goPrev();
+  }, [goPrev]);
+
+  const handleNext = useCallback(() => {
+    setSelected(null);
+    goNext();
+  }, [goNext]);
+
+  const handleToday = useCallback(() => {
+    setSelected(null);
+    goToday();
+  }, [goToday]);
+
+  /**
+   * 좌우 스와이프로도 달을 넘긴다 (버튼만 있으면 한 손 조작이 불편하다).
+   * Fling 은 방향별로 하나씩 만들어 Race 로 묶는다 — 하나의 Fling 에 두 방향을 주면
+   * 어느 쪽으로 튕겼는지 이벤트에서 알 수 없다.
+   * 워클릿을 쓰지 않으므로 `runOnJS(true)` 가 필수다.
+   */
+  const swipe = useMemo(
+    () =>
+      Gesture.Race(
+        Gesture.Fling().direction(Directions.LEFT).runOnJS(true).onEnd(handleNext),
+        Gesture.Fling().direction(Directions.RIGHT).runOnJS(true).onEnd(handlePrev),
+      ),
+    [handleNext, handlePrev],
   );
 
-  const goToday = () => {
-    listRef.current?.scrollToIndex({ index: PAST_MONTHS, animated: true });
-  };
+  /** 달이 바뀔 때 짧게 페이드 — 격자가 순간이동하면 어느 달인지 놓친다 */
+  const fade = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    fade.setValue(0.35);
+    const animation = Animated.timing(fade, {
+      toValue: 1,
+      duration: 160,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [month, fade]);
 
   return (
     <Screen edges={{ bottom: false }}>
-      <TabHeader title="캘린더" right={<Pill label="오늘" size="sm" selected onPress={goToday} />} />
+      <TabHeader
+        title="캘린더"
+        right={
+          <View className="flex-row items-center gap-[6px]">
+            {/* '오늘' 은 이번 달을 벗어났을 때만 — 늘 떠 있으면 헤더만 복잡해진다 */}
+            {isCurrentMonth ? null : (
+              <Pill label="오늘" size="sm" selected onPress={handleToday} />
+            )}
+            <MonthNav
+              label={formatMonthLong(month)}
+              onPrev={handlePrev}
+              onNext={handleNext}
+              canGoNext={canGoNext}
+            />
+          </View>
+        }
+      />
 
-      <View className="flex-row px-[18px] pb-[6px] pt-[8px]">
-        {WEEKDAY_KO.map(day => (
+      <View
+        className="flex-row pb-[6px] pt-[2px]"
+        style={{
+          paddingHorizontal: GRID_PAD,
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: tokens.line,
+        }}>
+        {WEEKDAY_KO.map((day, index) => (
           <Text
             key={day}
-            className="flex-1 text-center text-[11px]"
-            style={{ color: tokens.ink3 }}>
+            className="flex-1 text-center text-[11px] font-semibold"
+            style={{ color: index === SUNDAY ? tokens.critical : tokens.ink3 }}>
             {day}
           </Text>
         ))}
       </View>
 
-      <View className="flex-1">
-        <FlatList
-          ref={listRef}
-          data={months}
-          keyExtractor={month => month}
-          getItemLayout={getItemLayout}
-          initialScrollIndex={PAST_MONTHS}
-          initialNumToRender={3}
-          windowSize={5}
-          removeClippedSubviews
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 120 }}
-          onScrollBeginDrag={() => setHintVisible(false)}
-          onEndReachedThreshold={0.4}
-          onEndReached={() => setFuture(prev => prev + 12)}
-          renderItem={({ item }) => (
-            <MonthBlock
-              month={item}
-              plannedFor={plannedFor}
-              selectedDateKey={selected?.dateKey ?? null}
-              onSelectDay={(dateKey, items) => setSelected({ dateKey, items })}
-            />
-          )}
-        />
+      <GestureDetector gesture={swipe}>
+        <Animated.View
+          style={{ flex: 1, opacity: fade, paddingHorizontal: GRID_PAD }}
+          accessibilityLabel={isLoading ? '금액 불러오는 중' : undefined}>
+          {weeks.map((row, rowIndex) => (
+            <View
+              key={row[0]?.dateKey ?? rowIndex}
+              className="flex-row"
+              style={{
+                flex: 1,
+                minHeight: ROW_MIN_HEIGHT,
+                maxHeight: ROW_MAX_HEIGHT,
+                // 칸이 커진 만큼 줄 사이에 실선이 없으면 가로줄을 눈으로 못 따라간다
+                borderBottomWidth: rowIndex === weeks.length - 1 ? 0 : StyleSheet.hairlineWidth,
+                borderBottomColor: tokens.line,
+              }}>
+              {row.map(cell => (
+                <DayCell
+                  key={cell.dateKey}
+                  cell={cell}
+                  entry={byDay.get(cell.dateKey)}
+                  planned={plannedFor}
+                  todayKey={todayKey}
+                  loading={isLoading}
+                  selected={selected?.dateKey === cell.dateKey}
+                  onSelect={(dateKey, items) => setSelected({ dateKey, items })}
+                />
+              ))}
+            </View>
+          ))}
+        </Animated.View>
+      </GestureDetector>
 
-        {hintVisible ? (
+      <View
+        style={{
+          height: FOOTER_HEIGHT,
+          paddingLeft: GRID_PAD + 6,
+          // FAB(오른쪽 20 + 지름 58) 자리를 비워 둔다 — 숫자가 버튼에 가리지 않게
+          paddingRight: 86,
+          justifyContent: 'center',
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: tokens.line,
+        }}>
+        {isLoading ? (
           <View
-            pointerEvents="none"
-            style={{
-              position: 'absolute',
-              right: 16,
-              top: 12,
-              borderRadius: 8,
-              paddingHorizontal: 9,
-              paddingVertical: 6,
-              backgroundColor: isDark ? 'rgba(244,243,240,0.14)' : 'rgba(28,27,26,0.82)',
-            }}>
-            <Text style={{ fontSize: 10.5, color: '#ffffff', lineHeight: 15 }}>
-              {'↕ 아이폰 캘린더처럼\n위아래 무한 스크롤'}
-            </Text>
+            className="flex-row gap-[20px]"
+            accessibilityRole="progressbar"
+            accessibilityLabel="불러오는 중">
+            <View className="gap-[6px]">
+              <Skeleton width={24} height={10} />
+              <Skeleton width={88} height={15} />
+            </View>
+            <View className="gap-[6px]">
+              <Skeleton width={24} height={10} />
+              <Skeleton width={72} height={15} />
+            </View>
           </View>
-        ) : null}
+        ) : (
+          <View className="flex-row gap-[20px]">
+            <View>
+              <Text className={cx.caption}>지출</Text>
+              <Text className="mt-[2px] text-[15px] font-bold" style={{ color: tokens.chart }}>
+                {formatAmountKo(total.expense)}
+              </Text>
+            </View>
+            <View>
+              <Text className={cx.caption}>수입</Text>
+              <Text className="mt-[2px] text-[15px] font-bold" style={{ color: tokens.good }}>
+                {formatAmountKo(total.income)}
+              </Text>
+            </View>
+          </View>
+        )}
       </View>
 
-      <Fab onPress={() => navigation.navigate('AddTransaction', {})} bottom={20} />
+      <Fab onPress={() => navigation.navigate('AddTransaction', {})} bottom={8} />
 
-      <BottomSheet
-        visible={selected !== null}
-        onClose={() => setSelected(null)}
-        scrollable
-        title={undefined}>
+      <BottomSheet visible={selected !== null} onClose={() => setSelected(null)} scrollable>
         {selected ? <DaySheetBody selection={selected} /> : null}
       </BottomSheet>
     </Screen>
   );
 }
 
-interface MonthBlockProps {
-  month: string;
-  selectedDateKey: string | null;
-  plannedFor: (dateKey: string) => { title: string; amount: number; type: 'expense' | 'income' } | null;
-  onSelectDay: (dateKey: string, items: Transaction[]) => void;
+interface DayCellProps {
+  cell: CalendarCell;
+  entry: DayEntry | undefined;
+  planned: (dateKey: string) => { title: string; amount: number; type: 'expense' | 'income' } | null;
+  todayKey: string;
+  loading: boolean;
+  selected: boolean;
+  onSelect: (dateKey: string, items: Transaction[]) => void;
 }
 
-/** 한 달 그리드 — 보이는 달만 자기 월 거래를 불러온다 */
-function MonthBlock({ month, selectedDateKey, plannedFor, onSelectDay }: MonthBlockProps) {
+/** 날짜 한 칸 */
+function DayCell({ cell, entry, planned, todayKey, loading, selected, onSelect }: DayCellProps) {
   const { tokens } = useTheme();
-  const { data } = useMonthTransactions(month);
 
-  const byDay = useMemo(() => {
-    const map = new Map<string, { expense: number; income: number; items: Transaction[] }>();
-    (data ?? []).forEach(row => {
-      const dateKey = toDateKey(new Date(row.occurredAt));
-      const entry = map.get(dateKey) ?? { expense: 0, income: 0, items: [] };
-      entry.items.push(row);
-      if (row.type === 'expense') {
-        entry.expense += row.amount;
-      } else {
-        entry.income += row.amount;
-      }
-      map.set(dateKey, entry);
-    });
-    return map;
-  }, [data]);
-
-  const cells = useMemo(() => buildCalendarGrid(month), [month]);
-  const todayKey = toDateKey(new Date());
+  const isToday = cell.dateKey === todayKey;
+  const isFuture = cell.dateKey > todayKey;
+  const upcoming = cell.inCurrentMonth && !entry && isFuture ? planned(cell.dateKey) : null;
+  const isSunday = cell.date.getDay() === SUNDAY;
 
   return (
-    <View style={{ height: MONTH_HEIGHT }}>
-      <Text
-        style={{ height: LABEL_HEIGHT, paddingTop: 7, paddingHorizontal: 4 }}
-        className="text-[12.5px] font-bold text-ink-2 dark:text-ink-dark-2">
-        {formatMonthLong(month)}
-      </Text>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${cell.day}일`}
+      accessibilityState={{ selected }}
+      disabled={!cell.inCurrentMonth}
+      onPress={() => onSelect(cell.dateKey, entry?.items ?? [])}
+      style={{
+        flex: 1,
+        // 지난 달·다음 달 날짜는 자리만 지키고 뒤로 물러선다
+        opacity: cell.inCurrentMonth ? 1 : 0.3,
+      }}>
+      <View
+        style={{
+          flex: 1,
+          margin: 2,
+          borderRadius: 12,
+          paddingTop: 5,
+          paddingHorizontal: 2,
+          alignItems: 'center',
+          backgroundColor: selected ? tokens.selectedBg : 'transparent',
+          borderWidth: 1,
+          borderColor: selected ? tokens.selectedBorder : 'transparent',
+        }}>
+        {/*
+          오늘은 채운 원, 선택한 날은 칸 전체 틴트 — 둘을 다른 축으로 표현해야
+          '오늘을 선택한 상태' 가 구분된다. (칸 전체를 주황으로 채우면 금액 글씨가
+          흰색이 되어 지출·수입 색 구분이 사라진다)
+        */}
+        <View
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: 11,
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: isToday ? palette.orange500 : 'transparent',
+          }}>
+          <Text
+            style={{
+              fontSize: 12.5,
+              fontWeight: isToday || selected ? '700' : '500',
+              color: isToday ? '#ffffff' : isSunday ? tokens.critical : tokens.ink,
+            }}>
+            {cell.day}
+          </Text>
+        </View>
 
-      <View className="flex-row flex-wrap">
-        {cells.map(cell => {
-          const entry = byDay.get(cell.dateKey);
-          const selected = selectedDateKey === cell.dateKey;
-          const isFuture = cell.dateKey > todayKey;
-          const planned = !entry && isFuture ? plannedFor(cell.dateKey) : null;
+        {/*
+          날짜는 이미 다 그려져 있고 **금액만** 기다린다 — 그 자리에 스켈레톤을 둔다.
+          화면 전체를 스켈레톤으로 덮으면 이미 확정된 날짜까지 가려 오히려 느려 보인다.
+        */}
+        {loading && cell.inCurrentMonth ? (
+          <Skeleton width="70%" height={8} style={{ marginTop: 5 }} />
+        ) : null}
 
-          return (
-            <Pressable
-              key={cell.dateKey}
-              accessibilityRole="button"
-              accessibilityLabel={`${cell.day}일`}
-              disabled={!cell.inCurrentMonth}
-              onPress={() => onSelectDay(cell.dateKey, entry?.items ?? [])}
-              style={{
-                width: `${100 / 7}%`,
-                height: CELL_HEIGHT,
-                marginBottom: CELL_GAP,
-              }}>
-              <View
-                style={{
-                  flex: 1,
-                  marginHorizontal: 1,
-                  borderRadius: 10,
-                  paddingVertical: 5,
-                  paddingHorizontal: 3,
-                  alignItems: 'center',
-                  backgroundColor: selected ? palette.orange500 : 'transparent',
-                }}>
-                <Text
-                  style={{
-                    fontSize: 12.5,
-                    fontWeight: cell.inCurrentMonth ? '600' : '400',
-                    color: selected
-                      ? '#ffffff'
-                      : !cell.inCurrentMonth
-                        ? tokens.ink3
-                        : cell.dateKey === todayKey
-                          ? tokens.accentText
-                          : tokens.ink,
-                  }}>
-                  {cell.day}
-                </Text>
+        {!loading && cell.inCurrentMonth && entry && entry.expense > 0 ? (
+          <Text
+            numberOfLines={1}
+            style={{ fontSize: 10, lineHeight: 13, fontWeight: '600', color: tokens.chart }}>
+            {`-${formatCompactWon(entry.expense, CELL_MONEY)}`}
+          </Text>
+        ) : null}
 
-                {cell.inCurrentMonth && entry && entry.expense > 0 ? (
-                  <Text
-                    numberOfLines={1}
-                    style={{
-                      fontSize: 9.5,
-                      fontWeight: '600',
-                      marginTop: 1,
-                      color: selected ? '#ffffff' : tokens.chart,
-                    }}>
-                    {`-${formatCompactWon(entry.expense, CELL_MONEY)}`}
-                  </Text>
-                ) : null}
+        {!loading && cell.inCurrentMonth && entry && entry.income > 0 ? (
+          <Text
+            numberOfLines={1}
+            style={{ fontSize: 10, lineHeight: 13, fontWeight: '600', color: tokens.good }}>
+            {`+${formatCompactWon(entry.income, CELL_MONEY)}`}
+          </Text>
+        ) : null}
 
-                {cell.inCurrentMonth && entry && entry.income > 0 ? (
-                  <Text
-                    numberOfLines={1}
-                    style={{
-                      fontSize: 9.5,
-                      fontWeight: '600',
-                      color: selected ? '#ffffff' : tokens.good,
-                    }}>
-                    {`+${formatCompactWon(entry.income, CELL_MONEY)}`}
-                  </Text>
-                ) : null}
-
-                {cell.inCurrentMonth && planned ? (
-                  <Text
-                    numberOfLines={1}
-                    style={{ fontSize: 9.5, marginTop: 1, color: tokens.ink3 }}>
-                    {planned.title}
-                  </Text>
-                ) : null}
-              </View>
-            </Pressable>
-          );
-        })}
+        {!loading && upcoming ? (
+          <Text numberOfLines={1} style={{ fontSize: 9.5, lineHeight: 13, color: tokens.ink3 }}>
+            {upcoming.title}
+          </Text>
+        ) : null}
       </View>
-    </View>
+    </Pressable>
   );
+}
+
+/** 날짜별 합계 + 그 달 총계 */
+function aggregateByDay(rows: Transaction[]) {
+  const map = new Map<string, DayEntry>();
+  const sum = { expense: 0, income: 0 };
+
+  rows.forEach(row => {
+    const dateKey = toDateKey(new Date(row.occurredAt));
+    const entry = map.get(dateKey) ?? { expense: 0, income: 0, items: [] };
+    entry.items.push(row);
+    if (row.type === 'expense') {
+      entry.expense += row.amount;
+      sum.expense += row.amount;
+    } else {
+      entry.income += row.amount;
+      sum.income += row.amount;
+    }
+    map.set(dateKey, entry);
+  });
+
+  return { byDay: map, total: sum };
 }
 
 /** 날짜 상세 시트 (디자인 calendar 하단 시트) */
@@ -294,25 +428,32 @@ function DaySheetBody({ selection }: { selection: DaySelection }) {
         <Text className="text-[15px] font-bold text-ink dark:text-ink-dark">
           {formatDateShort(iso)}
         </Text>
+        {/* 지출·수입이 같은 날 다 있을 수 있다 — 둘 다 있으면 둘 다 보여준다 */}
         {selection.items.length > 0 ? (
-          <Text className="text-[13px] font-bold" style={{ color: tokens.accentText }}>
-            {`${expense > 0 ? `-${formatNumber(expense)}원` : `+${formatNumber(income)}원`} · ${
-              selection.items.length
-            }건`}
-          </Text>
+          <View className="flex-row items-center gap-[8px]">
+            {expense > 0 ? (
+              <Text className="text-[13px] font-bold" style={{ color: tokens.chart }}>
+                {`-${formatNumber(expense)}원`}
+              </Text>
+            ) : null}
+            {income > 0 ? (
+              <Text className="text-[13px] font-bold" style={{ color: tokens.good }}>
+                {`+${formatNumber(income)}원`}
+              </Text>
+            ) : null}
+            <Text className="text-[12.5px] text-ink-3 dark:text-ink-dark-3">
+              {`${selection.items.length}건`}
+            </Text>
+          </View>
         ) : null}
       </View>
 
       {selection.items.length === 0 ? (
         <View className="items-center py-[26px]">
-          <Text className={cx.caption}>
-            이 날은 기록이 없어요
-          </Text>
+          <Text className={cx.caption}>이 날은 기록이 없어요</Text>
           <Pressable
             accessibilityRole="button"
-            onPress={() =>
-              navigation.navigate('AddTransaction', { date: selection.dateKey })
-            }
+            onPress={() => navigation.navigate('AddTransaction', { date: selection.dateKey })}
             className="mt-[10px] active:opacity-60">
             <Text className="text-caption font-semibold" style={{ color: tokens.accentText }}>
               + 이 날에 기록 추가
@@ -333,9 +474,7 @@ function DaySheetBody({ selection }: { selection: DaySelection }) {
               }`}>
               <CategoryIcon categoryId={item.categoryId} size={34} iconSize={17} radius={10} />
               <View className="flex-1">
-                <Text
-                  numberOfLines={1}
-                  className="text-[14px] text-ink dark:text-ink-dark">
+                <Text numberOfLines={1} className="text-[14px] text-ink dark:text-ink-dark">
                   {item.title}
                 </Text>
                 <Text className="mt-[2px] text-[11.5px] text-ink-2 dark:text-ink-dark-2">
@@ -355,7 +494,6 @@ function DaySheetBody({ selection }: { selection: DaySelection }) {
   );
 }
 
-/** 셀 안에는 자리가 없으니 100만 이상은 '2.85M' 로 줄인다 */
 /**
  * 미래 날짜에 표시할 예정 고정지출 — 활성 반복거래에서 해당 날짜에 걸리는 첫 항목.
  * (짧은 달은 말일로 처리, 서버 스케줄러와 같은 규칙)

@@ -13,6 +13,8 @@ import {
   ListCard,
   Screen,
   ScreenHeader,
+  Skeleton,
+  SkeletonCard,
 } from '../components';
 import { useRecurringRules } from '../hooks/useRecurring';
 import { useAppNavigation } from '../navigation/hooks';
@@ -22,7 +24,7 @@ import { useTheme } from '../theme/ThemeProvider';
 export function RecurringScreen() {
   const navigation = useAppNavigation();
   const { tokens } = useTheme();
-  const { data } = useRecurringRules();
+  const { data, isLoading } = useRecurringRules();
   const rules = (data ?? []).filter(rule => rule.active);
 
   const totals = useMemo(() => {
@@ -33,21 +35,37 @@ export function RecurringScreen() {
     return { expense: sum('expense'), income: sum('income') };
   }, [rules]);
 
+  const header = (
+    <ScreenHeader
+      title="반복거래 관리"
+      onBack={navigation.goBack}
+      right={
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="반복거래 추가"
+          onPress={() => navigation.navigate('AddRecurring', {})}
+          hitSlop={8}>
+          <Plus size={19} strokeWidth={2} color={tokens.ink3} />
+        </Pressable>
+      }
+    />
+  );
+
+  // 로딩 중(data === undefined)에는 골격을 그린다. 데이터가 도착한 뒤의 빈 배열만
+  // "등록된 반복거래가 없어요" 빈 상태로 취급한다 — 로딩과 진짜 없음을 구분하지 않으면
+  // 첫 진입에서 항상 빈 상태가 잠깐 깜빡인다.
+  if (isLoading) {
+    return (
+      <Screen>
+        {header}
+        <RecurringSkeleton />
+      </Screen>
+    );
+  }
+
   return (
     <Screen>
-      <ScreenHeader
-        title="반복거래 관리"
-        onBack={navigation.goBack}
-        right={
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="반복거래 추가"
-            onPress={() => navigation.navigate('AddRecurring', {})}
-            hitSlop={8}>
-            <Plus size={19} strokeWidth={2} color={tokens.ink3} />
-          </Pressable>
-        }
-      />
+      {header}
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 40 }}>
         <Card padded={false} className="px-[16px] py-[16px]">
@@ -130,6 +148,23 @@ export function RecurringScreen() {
         )}
       </ScrollView>
     </Screen>
+  );
+}
+
+/** 반복거래 화면 로딩 골격 — 안내 배너 + 규칙 카드 4개 */
+function RecurringSkeleton() {
+  return (
+    <View
+      accessibilityRole="progressbar"
+      accessibilityLabel="불러오는 중"
+      style={{ paddingHorizontal: 18, paddingTop: 8 }}>
+      <Skeleton height={52} radius={14} />
+      <View style={{ marginTop: 14, gap: 10 }}>
+        {Array.from({ length: 4 }, (_, index) => (
+          <SkeletonCard key={index} height={74} />
+        ))}
+      </View>
+    </View>
   );
 }
 

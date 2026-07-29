@@ -16,7 +16,7 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import React, { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
 import {
   Button,
@@ -26,6 +26,8 @@ import {
   EmptyState,
   Screen,
   ScreenHeader,
+  Skeleton,
+  SkeletonCard,
 } from '../components';
 import { usePersonalRules } from '../hooks/useClassification';
 import { useDeleteTransaction, useTransaction } from '../hooks/useTransactions';
@@ -69,9 +71,7 @@ export function TransactionDetailScreen() {
     return (
       <Screen>
         <ScreenHeader title="거래 상세" onBack={navigation.goBack} />
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator color={tokens.ink3} />
-        </View>
+        <DetailSkeleton />
       </Screen>
     );
   }
@@ -219,5 +219,47 @@ function DetailRow({ icon: Icon, label, value, onPress, last = false }: RowProps
         {value}
       </Text>
     </Pressable>
+  );
+}
+
+/** 로딩 중 상세 골격 — 상단 아이콘/제목/금액, 정보 카드 4행, 수정 버튼 */
+function DetailSkeleton() {
+  return (
+    <View
+      accessibilityRole="progressbar"
+      accessibilityLabel="불러오는 중"
+      style={{ paddingHorizontal: 20 }}>
+      <View className="items-center pb-[6px] pt-[18px]">
+        <Skeleton width={56} height={56} radius={18} />
+        <Skeleton width="40%" height={18} radius={9} style={{ marginTop: 12 }} />
+        <Skeleton width="60%" height={34} radius={10} style={{ marginTop: 8 }} />
+      </View>
+
+      <SkeletonCard style={{ marginTop: 10 }}>
+        {Array.from({ length: 4 }, (_, index) => (
+          <DetailRowSkeleton key={index} last={index === 3} />
+        ))}
+      </SkeletonCard>
+
+      <View style={{ marginTop: 16, marginBottom: 28 }}>
+        <Skeleton height={46} radius={14} />
+      </View>
+    </View>
+  );
+}
+
+/** DetailRow 골격 — 아이콘 · 라벨(좌) · 값(우) · 구분선 */
+function DetailRowSkeleton({ last }: { last: boolean }) {
+  const { tokens } = useTheme();
+  return (
+    <View
+      className="flex-row items-center gap-[12px] py-[13px]"
+      style={last ? null : { borderBottomWidth: 1, borderBottomColor: tokens.line }}>
+      <Skeleton width={34} height={34} radius={10} />
+      <Skeleton width={44} height={13} />
+      <View className="flex-1 items-end">
+        <Skeleton width="50%" height={13} />
+      </View>
+    </View>
   );
 }
