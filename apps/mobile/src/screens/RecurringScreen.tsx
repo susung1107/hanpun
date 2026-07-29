@@ -43,7 +43,7 @@ export function RecurringScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="반복거래 추가"
-          onPress={() => navigation.navigate('AddRecurring', {})}
+          onPress={() => navigation.navigate('AddTransaction', { mode: 'recurring' })}
           hitSlop={8}>
           <Plus size={19} strokeWidth={2} color={tokens.ink3} />
         </Pressable>
@@ -96,7 +96,7 @@ export function RecurringScreen() {
                 label="반복거래 추가"
                 size="sm"
                 fullWidth={false}
-                onPress={() => navigation.navigate('AddRecurring', {})}
+                onPress={() => navigation.navigate('AddTransaction', { mode: 'recurring' })}
               />
             }
           />
@@ -141,7 +141,7 @@ export function RecurringScreen() {
             <View className="mt-[18px]">
               <Button
                 label="반복거래 추가"
-                onPress={() => navigation.navigate('AddRecurring', {})}
+                onPress={() => navigation.navigate('AddTransaction', { mode: 'recurring' })}
               />
             </View>
           </>

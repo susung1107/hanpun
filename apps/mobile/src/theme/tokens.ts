@@ -175,5 +175,8 @@ export const layout = {
   cardRadius: 18,
   tabBarHeight: 78,
   fabSize: 58,
-  fabBottom: 24,
+  // FAB 위치는 화면마다 같아야 한다 — 홈·캘린더·통계 어디서든 같은 자리에 떠야
+  // 손이 그 위치를 기억한다. 그래서 오프셋을 여기 한 곳에만 둔다.
+  fabBottom: 20,
+  fabRight: 20,
 } as const;

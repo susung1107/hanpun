@@ -9,10 +9,15 @@ interface Props {
   onPrev: () => void;
   onNext: () => void;
   canGoNext?: boolean;
+  /**
+   * 가운데 라벨을 눌렀을 때. 넘기면 라벨이 버튼이 되어 달 선택 시트를 연다.
+   * 안 넘기면 예전처럼 그냥 글자다(연 단위 네비 등 고를 게 없는 경우).
+   */
+  onPressLabel?: () => void;
 }
 
 /** ‹ 2026년 7월 › — 통계 화면 헤더의 기간 네비게이터 */
-export function MonthNav({ label, onPrev, onNext, canGoNext = true }: Props) {
+export function MonthNav({ label, onPrev, onNext, canGoNext = true, onPressLabel }: Props) {
   const { tokens } = useTheme();
   return (
     <View className="flex-row items-center gap-[8px]">
@@ -24,7 +29,18 @@ export function MonthNav({ label, onPrev, onNext, canGoNext = true }: Props) {
         className="h-[28px] w-[24px] items-center justify-center">
         <ChevronLeft size={18} strokeWidth={2} color={tokens.ink3} />
       </Pressable>
-      <Text className="text-[14px] font-bold text-ink dark:text-ink-dark">{label}</Text>
+      {onPressLabel ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${label} — 눌러서 달 선택`}
+          onPress={onPressLabel}
+          hitSlop={8}
+          className="items-center justify-center px-[2px] py-[4px]">
+          <Text className="text-[14px] font-bold text-ink dark:text-ink-dark">{label}</Text>
+        </Pressable>
+      ) : (
+        <Text className="text-[14px] font-bold text-ink dark:text-ink-dark">{label}</Text>
+      )}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="다음"

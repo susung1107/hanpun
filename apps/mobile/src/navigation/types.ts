@@ -17,10 +17,19 @@ export type RootStackParamList = {
   Transactions: { month?: string } | undefined;
   TransactionDetail: { id: string };
   /** 거래 입력 — type/categoryId 는 초기값 */
-  AddTransaction: { type?: TransactionType; categoryId?: CategoryId; date?: string } | undefined;
+  AddTransaction:
+    | {
+        type?: TransactionType;
+        categoryId?: CategoryId;
+        date?: string;
+        /** 반복거래를 만들러 들어온 경우 (반복거래 목록의 '추가') */
+        mode?: 'once' | 'recurring';
+      }
+    | undefined;
   TransactionEdit: { id: string };
   Recurring: undefined;
-  AddRecurring: { id?: string } | undefined;
+  /** 반복거래 **수정** 전용. 새로 만들 때는 AddTransaction 의 '반복' 탭으로 간다. */
+  AddRecurring: { id: string };
   Budget: undefined;
   Search: undefined;
   Notifications: undefined;

@@ -12,14 +12,14 @@ import {
   WEEKDAY_KO,
 } from '@hanpun/shared';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import {
   BottomSheet,
   CategoryIcon,
   Fab,
   MonthNav,
+  MonthPickerSheet,
   Pill,
   Screen,
   Skeleton,
@@ -34,17 +34,19 @@ import { useTheme } from '../theme/ThemeProvider';
 import { palette } from '../theme/tokens';
 
 /**
- * 캘린더는 **한 달만 그린다.**
+ * 캘린더는 **달 단위로 스냅되는 세로 무한 스크롤**이다.
  *
- * 예전에는 61개월을 세로 무한 스크롤로 깔고 `initialScrollIndex` 로 이번 달에
- * 점프했다. 그 구조는 두 가지가 나빴다:
- *   1) 가상 목록이 첫 프레임에 이번 달을 그리지 못해 **화면에 들어온 순간 빈 화면**이
- *      뜨고, 스크롤을 한 번 건드려야 달력이 나타났다.
- *   2) 한 화면에 여러 달의 끄트머리가 걸쳐 보여 "이번 달" 이라는 덩어리가 없었다.
+ * 한 화면에 한 달을 꽉 채워 그리고, 손을 떼면 달 경계에 딱 맞춰 멈춘다(`pagingEnabled`).
+ * 달 이동은 세로 스크롤과 헤더의 ‹ › 버튼(해당 달로 `scrollToIndex`) 두 가지로 한다.
  *
- * 지금은 그 달의 격자를 곧바로 렌더한다. 격자 계산(`buildCalendarGrid`)은 순수 함수라
- * 네트워크를 기다리지 않는다 — **날짜는 항상 즉시** 보이고, 금액만 나중에 채워진다.
- * 달 이동은 헤더의 ‹ › 버튼과 좌우 스와이프 두 가지로 한다.
+ * 첫 렌더 함정: `initialScrollIndex` + `getItemLayout` 을 쓰는데 첫 프레임의 페이지
+ * 높이가 0이면 캘린더가 통째로 빈 화면으로 뜬다. 그래서 격자 영역 높이를 `onLayout`
+ * 으로 잰 **다음에만** FlatList 를 만든다. 높이를 재기 전 한 프레임은 같은 `MonthPage`
+ * 를 flex:1 로 그려 두어 사용자가 차이를 못 느끼게 한다.
+ *
+ * 각 `MonthPage` 는 자기 달의 쿼리를 직접 든다 — 화면 단위로 한 달만 불러오면 스크롤
+ * 도중 옆 달이 빈칸으로 보인다. 격자 계산(`buildCalendarGrid`)은 순수 함수라 날짜는
+ * 항상 즉시 보이고 금액만 나중에 채워진다.
  */
 
 /** 격자 좌우 여백 — 다른 화면(18)보다 좁게 잡아 한 달이 화면을 거의 채우게 한다 */
@@ -74,6 +76,7 @@ const SUNDAY = 0;
 
 /** 반복거래로 예정된 고정지출을 미리 보여주므로 앞 달로도 갈 수 있어야 한다 */
 const MAX_FUTURE_MONTHS = 12;
+const MAX_PAST_MONTHS = 48;
 
 interface DaySelection {
   dateKey: string;
@@ -91,33 +94,85 @@ export function CalendarScreen() {
   const navigation = useAppNavigation();
   const { tokens } = useTheme();
 
-  const { month, goPrev, goNext, goToday, canGoNext, isCurrentMonth } = useMonthNavigation({
-    maxFutureMonths: MAX_FUTURE_MONTHS,
-  });
+  const { month, setMonth, goPrev, goNext, goToday, canGoNext, isCurrentMonth, currentMonth } =
+    useMonthNavigation({ maxFutureMonths: MAX_FUTURE_MONTHS });
   const [selected, setSelected] = useState<DaySelection | null>(null);
+  const [picker, setPicker] = useState(false);
 
   const { data, isLoading } = useMonthTransactions(month);
   const { data: rules } = useRecurringRules();
 
-  // 옆 달을 미리 받아 둔다 — ‹ › 를 누른 순간 금액이 이미 캐시에 있다
+  // 과거 48 + 이번 달 + 미래 12 = 61개월. 진짜 무한이 아니어도 5년치면 체감상 끝이 없고,
+  // 가상화 범위가 유한해야 성능이 예측 가능하다.
+  const months = useMemo(() => {
+    const first = shiftMonth(currentMonth, -MAX_PAST_MONTHS);
+    return Array.from({ length: MAX_PAST_MONTHS + MAX_FUTURE_MONTHS + 1 }, (_, index) =>
+      shiftMonth(first, index),
+    );
+  }, [currentMonth]);
+
+  // 옆 달을 미리 받아 둔다 — 스크롤이 도착하기 전에 금액이 이미 캐시에 있다.
+  // windowSize={3} 이라 살아 있는 쿼리 범위가 이 프리페치 범위와 같아진다.
   const neighbours = useMemo(() => [shiftMonth(month, -1), shiftMonth(month, 1)], [month]);
   usePrefetchMonths(neighbours);
 
   const plannedFor = useMemo(() => buildPlanner(rules ?? []), [rules]);
 
-  const { byDay, total } = useMemo(() => aggregateByDay(data ?? []), [data]);
-
-  /** 그 달에 필요한 주 수만 만든다 — 늘 6주로 그리면 5주짜리 달에 빈 줄이 남는다 */
-  const weeks = useMemo(() => {
-    const cells = buildCalendarGrid(month);
-    const rows: CalendarCell[][] = [];
-    for (let index = 0; index < cells.length; index += 7) {
-      rows.push(cells.slice(index, index + 7));
-    }
-    return rows;
-  }, [month]);
+  // 하단 요약 띠는 현재 보이는 달의 합계만 있으면 된다 (격자는 각 MonthPage 가 직접 든다)
+  const { total } = useMemo(() => aggregateByDay(data ?? []), [data]);
 
   const todayKey = toDateKey(new Date());
+
+  const [pageHeight, setPageHeight] = useState(0);
+  const listRef = useRef<FlatList<string>>(null);
+  // 버튼이 일으킨 스크롤과 스크롤이 일으킨 setMonth 가 서로 싸우지 않도록 현재 보이는 달을 따로 기억한다
+  const shown = useRef(month);
+
+  useEffect(() => {
+    if (shown.current === month) {
+      return;
+    }
+    shown.current = month;
+    const index = months.indexOf(month);
+    if (index < 0 || pageHeight === 0) {
+      return;
+    }
+    listRef.current?.scrollToIndex({ index, animated: true });
+  }, [month, months, pageHeight]);
+
+  const handleSettle = useCallback(
+    (offsetY: number) => {
+      if (pageHeight === 0) {
+        return;
+      }
+      const index = Math.round(offsetY / pageHeight);
+      const next = months[Math.min(Math.max(index, 0), months.length - 1)];
+      if (!next || next === shown.current) {
+        return;
+      }
+      shown.current = next;
+      setSelected(null);
+      setMonth(next);
+    },
+    [months, pageHeight, setMonth],
+  );
+
+  const handlePick = useCallback(
+    (year: number, monthNumber: number) => {
+      const key = `${year}-${String(monthNumber).padStart(2, '0')}`;
+      const first = months[0];
+      const last = months[months.length - 1];
+      const clamped = !first || !last ? key : key < first ? first : key > last ? last : key;
+      setPicker(false);
+      setSelected(null);
+      setMonth(clamped);
+    },
+    [months, setMonth],
+  );
+
+  const handleSelect = useCallback((dateKey: string, items: Transaction[]) => {
+    setSelected({ dateKey, items });
+  }, []);
 
   // 달이 바뀌면 열려 있던 날짜 선택을 버린다 (다른 달의 날짜가 남으면 안 된다)
   const handlePrev = useCallback(() => {
@@ -135,35 +190,6 @@ export function CalendarScreen() {
     goToday();
   }, [goToday]);
 
-  /**
-   * 좌우 스와이프로도 달을 넘긴다 (버튼만 있으면 한 손 조작이 불편하다).
-   * Fling 은 방향별로 하나씩 만들어 Race 로 묶는다 — 하나의 Fling 에 두 방향을 주면
-   * 어느 쪽으로 튕겼는지 이벤트에서 알 수 없다.
-   * 워클릿을 쓰지 않으므로 `runOnJS(true)` 가 필수다.
-   */
-  const swipe = useMemo(
-    () =>
-      Gesture.Race(
-        Gesture.Fling().direction(Directions.LEFT).runOnJS(true).onEnd(handleNext),
-        Gesture.Fling().direction(Directions.RIGHT).runOnJS(true).onEnd(handlePrev),
-      ),
-    [handleNext, handlePrev],
-  );
-
-  /** 달이 바뀔 때 짧게 페이드 — 격자가 순간이동하면 어느 달인지 놓친다 */
-  const fade = useRef(new Animated.Value(1)).current;
-  useEffect(() => {
-    fade.setValue(0.35);
-    const animation = Animated.timing(fade, {
-      toValue: 1,
-      duration: 160,
-      easing: Easing.out(Easing.quad),
-      useNativeDriver: true,
-    });
-    animation.start();
-    return () => animation.stop();
-  }, [month, fade]);
-
   return (
     <Screen edges={{ bottom: false }}>
       <TabHeader
@@ -179,6 +205,7 @@ export function CalendarScreen() {
               onPrev={handlePrev}
               onNext={handleNext}
               canGoNext={canGoNext}
+              onPressLabel={() => setPicker(true)}
             />
           </View>
         }
@@ -201,38 +228,53 @@ export function CalendarScreen() {
         ))}
       </View>
 
-      <GestureDetector gesture={swipe}>
-        <Animated.View
-          style={{ flex: 1, opacity: fade, paddingHorizontal: GRID_PAD }}
-          accessibilityLabel={isLoading ? '금액 불러오는 중' : undefined}>
-          {weeks.map((row, rowIndex) => (
-            <View
-              key={row[0]?.dateKey ?? rowIndex}
-              className="flex-row"
-              style={{
-                flex: 1,
-                minHeight: ROW_MIN_HEIGHT,
-                maxHeight: ROW_MAX_HEIGHT,
-                // 칸이 커진 만큼 줄 사이에 실선이 없으면 가로줄을 눈으로 못 따라간다
-                borderBottomWidth: rowIndex === weeks.length - 1 ? 0 : StyleSheet.hairlineWidth,
-                borderBottomColor: tokens.line,
-              }}>
-              {row.map(cell => (
-                <DayCell
-                  key={cell.dateKey}
-                  cell={cell}
-                  entry={byDay.get(cell.dateKey)}
-                  planned={plannedFor}
-                  todayKey={todayKey}
-                  loading={isLoading}
-                  selected={selected?.dateKey === cell.dateKey}
-                  onSelect={(dateKey, items) => setSelected({ dateKey, items })}
-                />
-              ))}
-            </View>
-          ))}
-        </Animated.View>
-      </GestureDetector>
+      <View
+        style={{ flex: 1 }}
+        onLayout={event => setPageHeight(Math.round(event.nativeEvent.layout.height))}>
+        {pageHeight === 0 ? (
+          // 높이를 재기 전 한 프레임. 같은 컴포넌트를 flex:1 로 그려 두면 사용자는 차이를 못 느낀다
+          <MonthPage
+            month={month}
+            height={0}
+            todayKey={todayKey}
+            planned={plannedFor}
+            selectedKey={selected?.dateKey ?? null}
+            onSelect={handleSelect}
+          />
+        ) : (
+          <FlatList
+            ref={listRef}
+            data={months}
+            keyExtractor={item => item}
+            renderItem={({ item }) => (
+              <MonthPage
+                month={item}
+                height={pageHeight}
+                todayKey={todayKey}
+                planned={plannedFor}
+                selectedKey={selected?.dateKey ?? null}
+                onSelect={handleSelect}
+              />
+            )}
+            getItemLayout={(_data, index) => ({
+              length: pageHeight,
+              offset: pageHeight * index,
+              index,
+            })}
+            initialScrollIndex={Math.max(months.indexOf(currentMonth), 0)}
+            onScrollToIndexFailed={info =>
+              listRef.current?.scrollToOffset({ offset: info.index * pageHeight, animated: false })
+            }
+            pagingEnabled
+            decelerationRate="fast"
+            showsVerticalScrollIndicator={false}
+            windowSize={3}
+            initialNumToRender={1}
+            maxToRenderPerBatch={2}
+            onMomentumScrollEnd={event => handleSettle(event.nativeEvent.contentOffset.y)}
+          />
+        )}
+      </View>
 
       <View
         style={{
@@ -276,12 +318,85 @@ export function CalendarScreen() {
         )}
       </View>
 
-      <Fab onPress={() => navigation.navigate('AddTransaction', {})} bottom={8} />
+      <Fab onPress={() => navigation.navigate('AddTransaction', {})} />
 
       <BottomSheet visible={selected !== null} onClose={() => setSelected(null)} scrollable>
         {selected ? <DaySheetBody selection={selected} /> : null}
       </BottomSheet>
+
+      <MonthPickerSheet
+        visible={picker}
+        title="달 선택"
+        year={Number(month.slice(0, 4))}
+        month={Number(month.slice(5, 7))}
+        onClose={() => setPicker(false)}
+        onConfirm={handlePick}
+      />
     </Screen>
+  );
+}
+
+interface MonthPageProps {
+  month: string;
+  height: number;
+  todayKey: string;
+  planned: (dateKey: string) => { title: string; amount: number; type: 'expense' | 'income' } | null;
+  selectedKey: string | null;
+  onSelect: (dateKey: string, items: Transaction[]) => void;
+}
+
+/** 한 달치 격자 (세로 페이징의 한 페이지) — export 하지 않는다 */
+function MonthPage({ month, height, todayKey, planned, selectedKey, onSelect }: MonthPageProps) {
+  const { tokens } = useTheme();
+
+  // 페이지마다 자기 쿼리를 든다 — 화면 단위로 한 달만 불러오면 스크롤 도중 옆 달이 빈칸으로 보인다
+  const { data, isLoading } = useMonthTransactions(month);
+  const { byDay } = useMemo(() => aggregateByDay(data ?? []), [data]);
+
+  /** 그 달에 필요한 주 수만 만든다 — 늘 6주로 그리면 5주짜리 달에 빈 줄이 남는다 */
+  const weeks = useMemo(() => {
+    const cells = buildCalendarGrid(month);
+    const rows: CalendarCell[][] = [];
+    for (let index = 0; index < cells.length; index += 7) {
+      rows.push(cells.slice(index, index + 7));
+    }
+    return rows;
+  }, [month]);
+
+  return (
+    <View
+      style={
+        height > 0
+          ? { height, paddingHorizontal: GRID_PAD }
+          : { flex: 1, paddingHorizontal: GRID_PAD }
+      }>
+      {weeks.map((row, rowIndex) => (
+        <View
+          key={row[0]?.dateKey ?? rowIndex}
+          className="flex-row"
+          style={{
+            flex: 1,
+            minHeight: ROW_MIN_HEIGHT,
+            maxHeight: ROW_MAX_HEIGHT,
+            // 칸이 커진 만큼 줄 사이에 실선이 없으면 가로줄을 눈으로 못 따라간다
+            borderBottomWidth: rowIndex === weeks.length - 1 ? 0 : StyleSheet.hairlineWidth,
+            borderBottomColor: tokens.line,
+          }}>
+          {row.map(cell => (
+            <DayCell
+              key={cell.dateKey}
+              cell={cell}
+              entry={byDay.get(cell.dateKey)}
+              planned={planned}
+              todayKey={todayKey}
+              loading={isLoading}
+              selected={selectedKey === cell.dateKey}
+              onSelect={onSelect}
+            />
+          ))}
+        </View>
+      ))}
+    </View>
   );
 }
 

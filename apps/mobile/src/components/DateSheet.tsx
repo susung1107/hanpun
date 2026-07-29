@@ -37,6 +37,12 @@ export function DateSheet({ visible, value, onClose, onConfirm, blockFuture = tr
 
   // 시트는 6주 고정 — 달을 넘길 때마다 시트 높이가 튀면 버튼 위치가 흔들린다
   const cells = buildCalendarGrid(month, 6);
+  // 7칸씩 주 단위로 끊는다. flex-wrap 에 맡기면 칸 폭(14.28%)이 기기마다 다르게
+  // 반올림돼 마지막 칸이 다음 줄로 밀리는 일이 있다. 명시적으로 주를 만든다.
+  const weeks: (typeof cells)[] = [];
+  for (let i = 0; i < cells.length; i += 7) {
+    weeks.push(cells.slice(i, i + 7));
+  }
   const [year, monthIndex] = month.split('-').map(Number);
   const todayKey = toDateKey(new Date());
   const selectedKey = toDateKey(selected);
@@ -72,40 +78,44 @@ export function DateSheet({ visible, value, onClose, onConfirm, blockFuture = tr
         ))}
       </View>
 
-      <View className="mt-[4px] flex-row flex-wrap">
-        {cells.map(cell => {
-          const isSelected = cell.dateKey === selectedKey;
-          const future = blockFuture && cell.dateKey > todayKey;
-          const disabled = !cell.inCurrentMonth || future;
-          return (
-            <Pressable
-              key={cell.dateKey}
-              accessibilityRole="button"
-              accessibilityState={{ selected: isSelected, disabled }}
-              disabled={disabled}
-              onPress={() => setSelected(new Date(`${cell.dateKey}T00:00:00`))}
-              style={{ width: `${100 / 7}%`, alignItems: 'center', paddingVertical: 2 }}>
-              <View
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: 16,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: isSelected ? palette.orange500 : 'transparent',
-                }}>
-                <Text
-                  style={{
-                    fontSize: 13.5,
-                    fontWeight: isSelected ? '700' : '400',
-                    color: isSelected ? '#ffffff' : disabled ? tokens.ink3 : tokens.ink,
-                  }}>
-                  {cell.day}
-                </Text>
-              </View>
-            </Pressable>
-          );
-        })}
+      <View className="mt-[4px]">
+        {weeks.map(week => (
+          <View key={week[0].dateKey} className="flex-row">
+            {week.map(cell => {
+              const isSelected = cell.dateKey === selectedKey;
+              const future = blockFuture && cell.dateKey > todayKey;
+              const disabled = !cell.inCurrentMonth || future;
+              return (
+                <Pressable
+                  key={cell.dateKey}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected, disabled }}
+                  disabled={disabled}
+                  onPress={() => setSelected(new Date(`${cell.dateKey}T00:00:00`))}
+                  style={{ flex: 1, alignItems: 'center', paddingVertical: 2 }}>
+                  <View
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 16,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      backgroundColor: isSelected ? palette.orange500 : 'transparent',
+                    }}>
+                    <Text
+                      style={{
+                        fontSize: 13.5,
+                        fontWeight: isSelected ? '700' : '400',
+                        color: isSelected ? '#ffffff' : disabled ? tokens.ink3 : tokens.ink,
+                      }}>
+                      {cell.day}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
+        ))}
       </View>
 
       <View className="mt-[14px] flex-row gap-[10px]">

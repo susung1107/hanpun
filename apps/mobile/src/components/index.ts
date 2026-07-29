@@ -14,6 +14,7 @@ export { ListCard } from './ListCard';
 export { ListRow, SectionLabel } from './ListRow';
 export { LogoBadge, LogoMark } from './Logo';
 export { MonthNav } from './MonthNav';
+export { MonthPickerSheet, NumberCell } from './MonthPickerSheet';
 export { Pill } from './Pill';
 export { ProgressBar } from './ProgressBar';
 export { Screen } from './Screen';

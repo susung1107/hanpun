@@ -7,15 +7,14 @@ import { palette, iconSize, iconStroke, layout } from '../theme/tokens';
 
 interface Props {
   onPress: () => void;
-  /** 탭바 위에 뜨는 기본 위치(오른쪽 20 / 아래 20) 대신 커스텀 위치가 필요할 때 */
-  bottom?: number;
 }
 
 /**
  * 플로팅 액션 버튼 — 58px 원형 + 주황 그림자 (디자인 「버튼」 카드).
  * 눌림 색은 usePressed 로 처리한다(정적 style 유지 — 함수형 style 은 NativeWind 가 무시).
+ * 위치는 화면마다 같아야 하므로 layout.fabRight/fabBottom 한 곳에서만 정한다.
  */
-export function Fab({ onPress, bottom = 20 }: Props) {
+export function Fab({ onPress }: Props) {
   const { pressed, pressHandlers } = usePressed();
 
   return (
@@ -26,8 +25,8 @@ export function Fab({ onPress, bottom = 20 }: Props) {
       {...pressHandlers}
       style={{
         position: 'absolute',
-        right: 20,
-        bottom,
+        right: layout.fabRight,
+        bottom: layout.fabBottom,
         width: layout.fabSize,
         height: layout.fabSize,
         borderRadius: layout.fabSize / 2,
