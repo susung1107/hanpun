@@ -45,20 +45,17 @@ import { cx } from '../theme/classes';
 import { useTheme } from '../theme/ThemeProvider';
 import { iconSize, iconStroke, layout, palette } from '../theme/tokens';
 
-/**
- * 메인 카드 채움 색 — 임의로 바꾸지 마라, 대비 계산 결과다.
- * 브랜드 orange-500 위 흰 글씨는 대비 3.20 으로 AA(4.5:1) 미달. 더 밝으면서 4.5:1 인 오렌지는 없다.
- * 그래서 위(진함)→아래(브랜드 색)로 밝아지는 세로 그라데이션으로 간다. 작은 글씨(라벨)는 맨 위에,
- * 아래쪽 작은 글씨는 어두운 패널이 덮으므로 이 방향이라야 알약 하나 없이 전부 통과한다.
- * 방향을 뒤집지 마라 — 밝음→어두움이면 최상단 라벨 대비가 3.20 으로 떨어진다.
- */
-const HERO_TOP_LIGHT = palette.orange600; // 흰 글씨 4.57
-const HERO_BOTTOM_LIGHT = palette.orange500; // 브랜드 색
-const HERO_TOP_DARK = palette.orange700; // 흰 글씨 6.66
-const HERO_BOTTOM_DARK = palette.orange600;
-const HERO_PANEL = 'rgba(0,0,0,0.22)'; // 최악점(브랜드 색 위) 기준 흰 글씨 4.97
-const HERO_TRACK = 'rgba(255,255,255,0.22)'; // 흰 막대와 3.38, 패널과 1.47 (검정 위 검정 겹침 방지)
-const HERO_PILL = 'rgba(0,0,0,0.18)'; // 흰 글씨 5.61
+// 메인 카드 — 예산 영역의 어두운 판을 걷어낸 대신, 카드 전체 색을 한 단계 내려
+// 판 없이도 흰 12px 글씨가 AA(4.5:1)를 넘게 만든다. 두 결정은 한 몸이다.
+// 그라데이션은 위(진함)→아래(밝음) — 뒤집으면 최상단 라벨 대비가 3.20 으로 떨어진다.
+const HERO_TOP_LIGHT = palette.orange700; // #a03c15, 흰 글씨 6.66
+const HERO_BOTTOM_LIGHT = palette.orange600; // #c94e1f, 흰 글씨 4.57 (카드 최악점)
+const HERO_TOP_DARK = palette.orange800; // #802e0e, 흰 글씨 9.07
+const HERO_BOTTOM_DARK = palette.orange700; // #a03c15, 흰 글씨 6.66
+const HERO_DIVIDER = 'rgba(255,255,255,0.16)'; // 예산 영역 구분선, 카드 면과 1.30
+const HERO_TRACK = 'rgba(0,0,0,0.20)'; // 카드 면 위 → 검정. 흰 막대와 6.65
+const HERO_PILL = 'rgba(0,0,0,0.18)'; // 흰 글씨 7.92
+const HERO_UNIT = 'rgba(255,255,255,0.88)'; // 금액 뒤 '원', 라이트 5.23
 
 const WEEK_BAR_HEIGHT = 52;
 
@@ -362,21 +359,20 @@ export function HomeScreen() {
               </View>
             )}
 
-            {/* 예산 패널 — 어두운 판이 흰 구분선을 대신하고 그 위 흰 글씨 대비를 만든다.
-                totalBudget 유무와 무관하게 패널은 항상 그린다 — 있다 없다 하면 카드 높이가 튄다 */}
+            {/* 예산 영역 — 판을 걷고 가는 구분선만 남긴다. 카드가 두 덩어리로 읽히지 않게.
+                totalBudget 유무와 무관하게 항상 그린다 — 있다 없다 하면 카드 높이가 튄다 */}
             <View
               style={{
                 marginTop: 16,
-                borderRadius: 14,
-                paddingHorizontal: 14,
-                paddingVertical: 13,
-                backgroundColor: HERO_PANEL,
+                paddingTop: 14,
+                borderTopWidth: 1,
+                borderTopColor: HERO_DIVIDER,
               }}>
               {totalBudget ? (
                 <>
                   <ProgressBar
                     ratio={budgetRatio}
-                    height={10}
+                    height={6}
                     warnOnOver={false}
                     color="#ffffff"
                     trackColor={HERO_TRACK}
