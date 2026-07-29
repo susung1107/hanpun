@@ -21,6 +21,7 @@ export { Screen } from './Screen';
 export { ScreenHeader } from './ScreenHeader';
 export { TabHeader } from './TabHeader';
 export { SegmentedControl, type SegmentOption } from './SegmentedControl';
+export { StatTile } from './StatTile';
 export {
   Skeleton,
   SkeletonCard,

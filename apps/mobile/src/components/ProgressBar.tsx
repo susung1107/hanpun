@@ -10,10 +10,12 @@ interface Props {
   /** 100% 초과분을 빨간색으로 표시 */
   warnOnOver?: boolean;
   color?: string;
+  /** 트랙(빈 부분) 색. 기본은 tokens.track — 오렌지 면 위처럼 배경이 다를 때만 덮어쓴다 */
+  trackColor?: string;
 }
 
 /** 진행 바 — track #f0efe9 / fill orange-500 / height 8 / radius 4 (디자인 「카드」 카드) */
-export function ProgressBar({ ratio, height = 8, warnOnOver = true, color }: Props) {
+export function ProgressBar({ ratio, height = 8, warnOnOver = true, color, trackColor }: Props) {
   const { tokens } = useTheme();
   const clamped = Math.max(0, Math.min(1, Number.isFinite(ratio) ? ratio : 0));
   const over = warnOnOver && ratio > 1;
@@ -23,7 +25,7 @@ export function ProgressBar({ ratio, height = 8, warnOnOver = true, color }: Pro
       style={{
         height,
         borderRadius: height / 2,
-        backgroundColor: tokens.track,
+        backgroundColor: trackColor ?? tokens.track,
         overflow: 'hidden',
       }}>
       <View

@@ -20,6 +20,7 @@ import {
   SegmentedControl,
   Skeleton,
   SkeletonCard,
+  StatTile,
   TabHeader,
   type SegmentOption,
 } from '../components';
@@ -173,9 +174,9 @@ function MonthlyStatsView({ month }: { month: string }) {
     <>
       <Card padded={false} className="px-[16px] py-[16px]">
         <View className="flex-row">
-          <Kpi label="지출" value={formatNumber(stats.totalExpense)} />
-          <Kpi label="수입" value={formatNumber(stats.totalIncome)} color={tokens.good} />
-          <Kpi
+          <StatTile label="지출" value={formatNumber(stats.totalExpense)} />
+          <StatTile label="수입" value={formatNumber(stats.totalIncome)} color={tokens.good} />
+          <StatTile
             label="수지"
             value={`${stats.totalIncome - stats.totalExpense >= 0 ? '+' : '-'}${formatNumber(
               Math.abs(stats.totalIncome - stats.totalExpense),
@@ -309,9 +310,9 @@ function YearlyStatsView({ year }: { year: number }) {
     <>
       <Card padded={false} className="px-[16px] py-[16px]">
         <View className="flex-row">
-          <Kpi label="연 지출" value={formatNumber(stats.totalExpense)} size={16} />
-          <Kpi label="연 수입" value={formatNumber(stats.totalIncome)} color={tokens.good} size={16} />
-          <Kpi label="월평균 지출" value={formatNumber(average)} size={16} />
+          <StatTile label="연 지출" value={formatNumber(stats.totalExpense)} size={16} />
+          <StatTile label="연 수입" value={formatNumber(stats.totalIncome)} color={tokens.good} size={16} />
+          <StatTile label="월평균 지출" value={formatNumber(average)} size={16} />
         </View>
       </Card>
 
@@ -492,30 +493,6 @@ function YearlyStatsSkeleton() {
 }
 
 /* --------------------------------- 조각들 --------------------------------- */
-
-function Kpi({
-  label,
-  value,
-  color,
-  size = 17,
-}: {
-  label: string;
-  value: string;
-  color?: string;
-  size?: number;
-}) {
-  const { tokens } = useTheme();
-  return (
-    <View className="flex-1">
-      <Text style={{ fontSize: 11, color: tokens.ink3 }}>{label}</Text>
-      <Text
-        numberOfLines={1}
-        style={{ marginTop: 4, fontSize: size, fontWeight: '700', color: color ?? tokens.ink }}>
-        {value}
-      </Text>
-    </View>
-  );
-}
 
 function CategoryBar({
   label,
