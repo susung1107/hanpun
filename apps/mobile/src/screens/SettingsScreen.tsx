@@ -5,7 +5,6 @@ import {
   CircleAlert,
   FileText,
   Lock,
-  LogOut,
   Moon,
   MonitorSmartphone,
   Repeat,
@@ -235,15 +234,11 @@ export function SettingsScreen() {
             divider={false}
             onPress={() => Alert.alert('오픈소스 라이선스', '출시 전 목록이 연결됩니다.')}
           />
-          <ListRow
-            icon={LogOut}
-            iconTint={tokens.criticalTint}
-            iconColor={tokens.critical}
-            title="회원 탈퇴"
-            danger
-            divider={false}
-            onPress={() => navigation.navigate('Account')}
-          />
+          {/*
+            회원 탈퇴는 여기 두지 않는다 — 계정 관리 화면 안에만 있다.
+            돌이킬 수 없는 동작이 설정 목록을 훑다가 눈에 띄는 자리에 있으면
+            실수로 누르기 쉽고, 같은 기능이 두 군데 있으면 확인 절차도 갈라진다.
+          */}
         </ListCard>
 
         <Text className="mt-[18px] text-center text-[11.5px]" style={{ color: tokens.ink3 }}>
