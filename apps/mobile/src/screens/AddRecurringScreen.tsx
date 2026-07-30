@@ -34,6 +34,7 @@ import {
   useRecurringRules,
   useUpdateRecurringRule,
 } from '../hooks/useRecurring';
+import { showToast } from '../lib/toast';
 import { useAppNavigation } from '../navigation/hooks';
 import type { RootStackParamList } from '../navigation/types';
 import { cx } from '../theme/classes';
@@ -137,6 +138,7 @@ export function AddRecurringScreen() {
       // 실패 알림은 전역 MutationCache 가 띄운다. 화면을 닫지 않고 입력값을 지킨다.
       return;
     }
+    showToast('반복거래를 수정했어요');
     navigation.goBack();
   };
 
@@ -146,6 +148,7 @@ export function AddRecurringScreen() {
     } catch {
       return;
     }
+    showToast('반복거래를 삭제했어요');
     navigation.goBack();
   };
 

@@ -2,6 +2,7 @@ import type { PersonalRule } from '@hanpun/shared';
 import { formatBudgetWon, formatCompactWon } from '@hanpun/shared';
 
 import { planCategoryMemory, suggestCategory } from '../src/lib/classify';
+import { MIN_YEAR, yearPageStart } from '../src/lib/yearPage';
 import { mockApi } from '../src/mocks/api';
 
 describe('금액 축약 표기', () => {
@@ -92,5 +93,23 @@ describe('월간 통계 byDay 계약', () => {
     const stats = await mockApi.getMonthlyStats('2026-07');
     expect(stats.byDay).toHaveLength(31);
     expect(stats.byDay[30]!.date).toBe('2026-07-31');
+  });
+});
+
+describe('연도 선택 12년 묶음', () => {
+  it('첫 묶음은 올해로 끝난다 — 미래 해가 격자에 안 나온다', () => {
+    expect(yearPageStart(2026, 2026)).toBe(2015);
+    expect(yearPageStart(2015, 2026)).toBe(2015);
+  });
+
+  it('묶음 밖으로 나가면 12년 단위로 뒤로 밀린다', () => {
+    expect(yearPageStart(2014, 2026)).toBe(2003);
+    expect(yearPageStart(2003, 2026)).toBe(2003);
+    expect(yearPageStart(2002, 2026)).toBe(1991);
+  });
+
+  it('범위 밖 연도는 가장 가까운 묶음으로 잡는다', () => {
+    expect(yearPageStart(2030, 2026)).toBe(2015);
+    expect(yearPageStart(1800, 2026)).toBe(yearPageStart(MIN_YEAR, 2026));
   });
 });

@@ -22,6 +22,7 @@ import {
   SkeletonCard,
   StatTile,
   TabHeader,
+  YearPickerSheet,
   type SegmentOption,
 } from '../components';
 import { useBudgetProgress } from '../hooks/useBudgets';
@@ -54,6 +55,7 @@ export function StatsScreen() {
   const { month, setMonth, goPrev, goNext, canGoNext } = useMonthNavigation();
   const [year, setYear] = useState(() => new Date().getFullYear());
   const [picker, setPicker] = useState(false);
+  const [yearPicker, setYearPicker] = useState(false);
 
   const label =
     range === 'month' ? formatMonthLong(month) : `${year}년`;
@@ -77,6 +79,8 @@ export function StatsScreen() {
               onPrev={() => setYear(prev => prev - 1)}
               onNext={() => setYear(prev => prev + 1)}
               canGoNext={year < new Date().getFullYear()}
+              onPressLabel={() => setYearPicker(true)}
+              pressHint="연도 선택"
             />
           )
         }
@@ -113,6 +117,17 @@ export function StatsScreen() {
           const now = new Date();
           const capped = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
           setMonth(key > capped ? capped : key);
+        }}
+      />
+
+      <YearPickerSheet
+        visible={yearPicker}
+        year={year}
+        maxYear={new Date().getFullYear()}
+        onClose={() => setYearPicker(false)}
+        onConfirm={picked => {
+          setYearPicker(false);
+          setYear(picked);
         }}
       />
     </Screen>

@@ -24,6 +24,7 @@ import {
 } from '../components';
 import { useBudgetProgress, useBudgets, useDeleteBudget, useUpsertBudget } from '../hooks/useBudgets';
 import { useMonthNavigation } from '../hooks/useMonthNavigation';
+import { showToast } from '../lib/toast';
 import { useAppNavigation } from '../navigation/hooks';
 import { useTheme } from '../theme/ThemeProvider';
 
@@ -104,6 +105,7 @@ export function BudgetScreen() {
       );
       await Promise.all(removed.map(budget => remove.mutateAsync(budget.id)));
 
+      showToast('예산을 저장했어요');
       navigation.goBack();
     } catch {
       // 실패 알림은 전역 MutationCache 가 띄운다. 화면을 닫지 않고 입력값을 지킨다.
