@@ -127,6 +127,8 @@ export function CalendarScreen() {
   const listRef = useRef<FlatList<string>>(null);
   // 버튼이 일으킨 스크롤과 스크롤이 일으킨 setMonth 가 서로 싸우지 않도록 현재 보이는 달을 따로 기억한다
   const shown = useRef(month);
+  // 첫 진입 때 현재 달로 붙였는지 — initialScrollIndex 만으로는 불안정해 한 번 명시적으로 스크롤한다
+  const positioned = useRef(false);
 
   useEffect(() => {
     if (shown.current === month) {
@@ -139,6 +141,24 @@ export function CalendarScreen() {
     }
     listRef.current?.scrollToIndex({ index, animated: true });
   }, [month, months, pageHeight]);
+
+  // 2단계 렌더(높이 측정 → FlatList) + 가상화 조합에서 initialScrollIndex 가 첫 프레임에
+  // 현재 달로 안 붙는 기기가 있다. 그러면 캘린더가 48개월 전 빈 달을 보여줘, 잠깐 떴던
+  // 이번 달 데이터가 사라진 것처럼 보인다. pageHeight 를 잰 직후 현재 달로 한 번 못 박는다.
+  // (scrollToIndex 가 실패하면 onScrollToIndexFailed 가 offset 으로 받아 준다)
+  useEffect(() => {
+    if (pageHeight === 0 || positioned.current) {
+      return;
+    }
+    const index = months.indexOf(currentMonth);
+    if (index < 0) {
+      return;
+    }
+    positioned.current = true;
+    requestAnimationFrame(() => {
+      listRef.current?.scrollToIndex({ index, animated: false });
+    });
+  }, [pageHeight, months, currentMonth]);
 
   const handleSettle = useCallback(
     (offsetY: number) => {
