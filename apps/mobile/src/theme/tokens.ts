@@ -50,6 +50,8 @@ export const palette = {
   orangeChartDark: '#d95926',
   /** 다크 모드에서 orange-100 테두리를 대체하는 색 (디자인 home-dark) */
   orangeBorderDark: '#3a2c24',
+  /** 토스트 알림 면 — 다크에서 카드(#26251f)보다 한 단계 밝게 띄운다 */
+  toastDark: '#38372f',
 } as const;
 
 /** 테마별 의미 토큰 */
@@ -92,6 +94,9 @@ export interface ThemeTokens {
   /** AI 자동분류·안내 배너 배경/테두리 */
   bannerBg: string;
   bannerBorder: string;
+  /** 토스트 알림 면 / 글자 (라이트는 반전색) */
+  toastBg: string;
+  toastInk: string;
 }
 
 export const lightTokens: ThemeTokens = {
@@ -121,6 +126,8 @@ export const lightTokens: ThemeTokens = {
   chartEmpty: '#e5e3dd',
   bannerBg: palette.orange50,
   bannerBorder: palette.orange100,
+  toastBg: palette.ink,
+  toastInk: '#ffffff',
 };
 
 export const darkTokens: ThemeTokens = {
@@ -150,6 +157,8 @@ export const darkTokens: ThemeTokens = {
   chartEmpty: palette.lineDark,
   bannerBg: 'rgba(235,104,52,0.10)',
   bannerBorder: 'rgba(235,104,52,0.24)',
+  toastBg: palette.toastDark,
+  toastInk: palette.inkDark,
 };
 
 /** 아이콘 규격 (디자인 시스템 「아이콘」 카드) */
@@ -179,4 +188,10 @@ export const layout = {
   // 손이 그 위치를 기억한다. 그래서 오프셋을 여기 한 곳에만 둔다.
   fabBottom: 20,
   fabRight: 20,
+  /**
+   * 토스트가 화면 아래에서 떨어지는 거리(안전영역 제외).
+   * 탭바 62 + FAB 아래 여백 20 + FAB 58 + 여백 12 = 152.
+   * 화면마다 다시 계산하지 않는다 — FAB 과 같은 이유로, 자리가 흔들리지 않아야 한다.
+   */
+  toastBottom: 152,
 } as const;

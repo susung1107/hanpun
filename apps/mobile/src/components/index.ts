@@ -29,4 +29,5 @@ export {
   SkeletonRow,
   SkeletonText,
 } from './Skeleton';
+export { ToastHost } from './Toast';
 export { TransactionRow } from './TransactionRow';

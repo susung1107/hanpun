@@ -25,6 +25,7 @@ import { usePersonalRules, useRememberCategory } from '../hooks/useClassificatio
 import { useCreateRecurringRule } from '../hooks/useRecurring';
 import { useCreateTransaction } from '../hooks/useTransactions';
 import { planCategoryMemory, suggestCategory } from '../lib/classify';
+import { showToast } from '../lib/toast';
 import { useAppNavigation } from '../navigation/hooks';
 import type { RootStackParamList } from '../navigation/types';
 import { useTheme } from '../theme/ThemeProvider';
@@ -167,6 +168,7 @@ export function AddTransactionScreen() {
     if (plan) {
       remember.mutate(plan);
     }
+    showToast(mode === 'recurring' ? '반복거래를 추가했어요' : '내역을 저장했어요');
     navigation.goBack();
   };
 

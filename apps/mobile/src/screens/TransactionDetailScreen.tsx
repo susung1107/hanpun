@@ -32,6 +32,7 @@ import {
 import { usePersonalRules } from '../hooks/useClassification';
 import { useDeleteTransaction, useTransaction } from '../hooks/useTransactions';
 import { suggestCategory } from '../lib/classify';
+import { showToast } from '../lib/toast';
 import { useAppNavigation } from '../navigation/hooks';
 import type { RootStackParamList } from '../navigation/types';
 import { cx } from '../theme/classes';
@@ -91,6 +92,7 @@ export function TransactionDetailScreen() {
       return;
     }
     setConfirming(false);
+    showToast('내역을 삭제했어요');
     navigation.goBack();
   };
 

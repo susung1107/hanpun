@@ -29,6 +29,7 @@ import {
 import { usePersonalRules, useRememberCategory } from '../hooks/useClassification';
 import { useDeleteTransaction, useTransaction, useUpdateTransaction } from '../hooks/useTransactions';
 import { planCategoryMemory } from '../lib/classify';
+import { showToast } from '../lib/toast';
 import { useAppNavigation } from '../navigation/hooks';
 import type { RootStackParamList } from '../navigation/types';
 import { useTheme } from '../theme/ThemeProvider';
@@ -131,6 +132,7 @@ export function TransactionEditScreen() {
         remember.mutate(plan);
       }
     }
+    showToast('내역을 수정했어요');
     navigation.goBack();
   };
 
@@ -142,6 +144,7 @@ export function TransactionEditScreen() {
       return;
     }
     setConfirming(false);
+    showToast('내역을 삭제했어요');
     // 상세 → 수정 순서로 쌓여 있으므로 목록까지 두 단계 되돌린다
     navigation.pop(2);
   };

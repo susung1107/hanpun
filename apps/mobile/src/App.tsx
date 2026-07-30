@@ -5,6 +5,7 @@ import BootSplash from 'react-native-bootsplash';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { ToastHost } from './components';
 import { AppLockGate } from './screens/AppLockScreen';
 import { queryClient, queryPersister, resetQueryCache } from './lib/queryClient';
 import { RootNavigator } from './navigation/RootNavigator';
@@ -71,6 +72,8 @@ function AppShell() {
       <AppLockGate>
         <RootNavigator />
       </AppLockGate>
+      {/* 네비게이터 바깥 — 저장 후 화면이 닫혀도 토스트는 남아야 한다 */}
+      <ToastHost />
     </>
   );
 }

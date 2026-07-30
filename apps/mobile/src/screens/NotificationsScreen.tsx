@@ -15,6 +15,7 @@ import {
   SkeletonCard,
 } from '../components';
 import { useMarkNotificationsRead, useNotifications } from '../hooks/useNotifications';
+import { showToast } from '../lib/toast';
 import { useAppNavigation } from '../navigation/hooks';
 import { useTheme } from '../theme/ThemeProvider';
 import { palette } from '../theme/tokens';
@@ -114,7 +115,11 @@ export function NotificationsScreen() {
           hasUnread ? (
             <Pressable
               accessibilityRole="button"
-              onPress={() => markRead.mutate()}
+              onPress={() =>
+                markRead.mutate(undefined, {
+                  onSuccess: () => showToast('알림을 모두 읽음으로 표시했어요'),
+                })
+              }
               hitSlop={8}>
               <Text className="text-[12px] text-ink-3 dark:text-ink-dark-3">모두 읽음</Text>
             </Pressable>
