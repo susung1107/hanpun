@@ -94,6 +94,11 @@ export function CalendarScreen() {
     useMonthNavigation({ maxFutureMonths: MAX_FUTURE_MONTHS });
   const [selected, setSelected] = useState<DaySelection | null>(null);
   const [picker, setPicker] = useState(false);
+  // 닫힘 애니메이션 동안 시트 내용이 사라지지 않도록 마지막 선택을 잡아 둔다
+  const lastSelectionRef = useRef<DaySelection | null>(null);
+  if (selected) {
+    lastSelectionRef.current = selected;
+  }
 
   const { data, isLoading } = useMonthTransactions(month);
   const { data: rules } = useRecurringRules();
@@ -260,7 +265,7 @@ export function CalendarScreen() {
       <Fab onPress={() => navigation.navigate('AddTransaction', {})} />
 
       <BottomSheet visible={selected !== null} onClose={() => setSelected(null)} scrollable>
-        {selected ? <DaySheetBody selection={selected} /> : null}
+        {lastSelectionRef.current ? <DaySheetBody selection={lastSelectionRef.current} /> : null}
       </BottomSheet>
 
       <MonthPickerSheet

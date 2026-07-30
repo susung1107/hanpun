@@ -87,6 +87,12 @@ export function BottomSheet({ visible, onClose, title, children, scrollable = fa
    */
   const handleLayout = useCallback(
     (event: { nativeEvent: { layout: { height: number } } }) => {
+      // 닫히는 중이면 아무것도 하지 않는다.
+      // 닫힐 때 시트 내용(예: 캘린더의 DaySheetBody)이 즉시 사라지며 재레이아웃이 일어나는데,
+      // 여기서 높이를 갱신하면 translateY 가 튀고, opened 가 false 라 다시 열려 닫힘과 싸운다.
+      if (!visible) {
+        return;
+      }
       const { height } = event.nativeEvent.layout;
       setSheetHeight(height);
       if (opened.current) {
@@ -100,7 +106,7 @@ export function BottomSheet({ visible, onClose, title, children, scrollable = fa
         useNativeDriver: true,
       }).start();
     },
-    [progress],
+    [progress, visible],
   );
 
   const translateY = progress.interpolate({
