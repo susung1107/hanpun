@@ -14,10 +14,19 @@ interface Props {
    * 안 넘기면 예전처럼 그냥 글자다(연 단위 네비 등 고를 게 없는 경우).
    */
   onPressLabel?: () => void;
+  /** 라벨을 눌러 무엇을 고르는지 (보이스오버 문구). 연 단위 네비에서는 '연도 선택' */
+  pressHint?: string;
 }
 
 /** ‹ 2026년 7월 › — 통계 화면 헤더의 기간 네비게이터 */
-export function MonthNav({ label, onPrev, onNext, canGoNext = true, onPressLabel }: Props) {
+export function MonthNav({
+  label,
+  onPrev,
+  onNext,
+  canGoNext = true,
+  onPressLabel,
+  pressHint = '달 선택',
+}: Props) {
   const { tokens } = useTheme();
   return (
     <View className="flex-row items-center gap-[8px]">
@@ -32,7 +41,7 @@ export function MonthNav({ label, onPrev, onNext, canGoNext = true, onPressLabel
       {onPressLabel ? (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`${label} — 눌러서 달 선택`}
+          accessibilityLabel={`${label} — 눌러서 ${pressHint}`}
           onPress={onPressLabel}
           hitSlop={8}
           className="items-center justify-center px-[2px] py-[4px]">
