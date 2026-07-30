@@ -478,13 +478,14 @@ function DaySheetBody({ selection }: { selection: DaySelection }) {
 
   return (
     <View>
-      <View className="flex-row items-center justify-between pb-[4px]">
-        <Text className="text-[15px] font-bold text-ink dark:text-ink-dark">
+      {/* 헤더 — 날짜를 키우고 아래 여백을 넉넉히 줘 목록과 확실히 분리한다 */}
+      <View className="flex-row items-center justify-between pb-[16px]">
+        <Text className="text-[17px] font-bold text-ink dark:text-ink-dark">
           {formatDateShort(iso)}
         </Text>
         {/* 지출·수입이 같은 날 다 있을 수 있다 — 둘 다 있으면 둘 다 보여준다 */}
         {selection.items.length > 0 ? (
-          <View className="flex-row items-center gap-[8px]">
+          <View className="flex-row items-center gap-[10px]">
             {expense > 0 ? (
               <Text className="text-[13px] font-bold" style={{ color: tokens.chart }}>
                 {`-${formatNumber(expense)}원`}
@@ -503,40 +504,39 @@ function DaySheetBody({ selection }: { selection: DaySelection }) {
       </View>
 
       {selection.items.length === 0 ? (
-        <View className="items-center py-[26px]">
+        <View className="items-center py-[36px]">
           <Text className={cx.caption}>이 날은 기록이 없어요</Text>
           <Pressable
             accessibilityRole="button"
             onPress={() => navigation.navigate('AddTransaction', { date: selection.dateKey })}
-            className="mt-[10px] active:opacity-60">
+            className="mt-[16px] active:opacity-60">
             <Text className="text-caption font-semibold" style={{ color: tokens.accentText }}>
               + 이 날에 기록 추가
             </Text>
           </Pressable>
         </View>
       ) : (
-        <ScrollView style={{ maxHeight: 320 }}>
-          {selection.items.map((item, index) => (
+        // 딱딱한 구분선 대신 넉넉한 세로 여백으로 행을 나눈다 — 촘촘함을 덜어 낸다
+        <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+          {selection.items.map(item => (
             <Pressable
               key={item.id}
               accessibilityRole="button"
               onPress={() => navigation.navigate('TransactionDetail', { id: item.id })}
-              className={`flex-row items-center gap-[11px] py-[10px] active:opacity-60 ${
-                index === selection.items.length - 1
-                  ? ''
-                  : 'border-b border-line dark:border-line-dark'
-              }`}>
-              <CategoryIcon categoryId={item.categoryId} size={34} iconSize={17} radius={10} />
+              className="flex-row items-center gap-[13px] py-[13px] active:opacity-60">
+              <CategoryIcon categoryId={item.categoryId} size={38} iconSize={19} radius={12} />
               <View className="flex-1">
-                <Text numberOfLines={1} className="text-[14px] text-ink dark:text-ink-dark">
+                <Text
+                  numberOfLines={1}
+                  className="text-[14.5px] font-medium text-ink dark:text-ink-dark">
                   {item.title}
                 </Text>
-                <Text className="mt-[2px] text-[11.5px] text-ink-2 dark:text-ink-dark-2">
+                <Text className="mt-[3px] text-[12px] text-ink-2 dark:text-ink-dark-2">
                   {getCategoryLabel(item.categoryId)}
                 </Text>
               </View>
               <Text
-                className="text-[14px] font-semibold"
+                className="text-[15px] font-bold"
                 style={{ color: item.type === 'income' ? tokens.good : tokens.ink }}>
                 {`${item.type === 'income' ? '+' : '-'}${formatNumber(item.amount)}원`}
               </Text>
